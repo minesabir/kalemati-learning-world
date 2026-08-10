@@ -1,0 +1,88 @@
+export type AssessmentQuestion = {
+  id: string;
+  level: number;
+  skill: "Sounds" | "Vocabulary" | "Sentences" | "Reading";
+  prompt: string;
+  arabic: string;
+  spoken?: string;
+  options: { label: string; display: string }[];
+  answer: string;
+  insight: string;
+};
+
+export const assessmentQuestions: AssessmentQuestion[] = [
+  { id: "test-1-sound", level: 1, skill: "Sounds", prompt: "Listen, then choose the meaning.", arabic: "اِسْتَمِعْ", spoken: "قَمَر", options: [{ label: "Moon", display: "🌙" }, { label: "Book", display: "📘" }, { label: "Sun", display: "☀️" }], answer: "Moon", insight: "قَمَر means moon." },
+  { id: "test-1-letter", level: 1, skill: "Reading", prompt: "Which letter begins this word?", arabic: "بَيْت", spoken: "بَيْت", options: [{ label: "ب", display: "ب" }, { label: "ت", display: "ت" }, { label: "ي", display: "ي" }], answer: "ب", insight: "بَيْت begins with the sound ب." },
+  { id: "test-1-word", level: 1, skill: "Vocabulary", prompt: "Choose the meaning.", arabic: "كِتَاب", spoken: "كِتَاب", options: [{ label: "Book", display: "Book" }, { label: "Door", display: "Door" }, { label: "Hand", display: "Hand" }], answer: "Book", insight: "كِتَاب is a book." },
+  { id: "test-1-sentence", level: 1, skill: "Sentences", prompt: "Choose: This is a flower.", arabic: "This is a flower", options: [{ label: "هَذِهِ زَهْرَةٌ", display: "هَذِهِ زَهْرَةٌ" }, { label: "هَذَا قَمَرٌ", display: "هَذَا قَمَرٌ" }, { label: "هَذِهِ يَدِي", display: "هَذِهِ يَدِي" }], answer: "هَذِهِ زَهْرَةٌ", insight: "هَذِهِ is used here because زَهْرَة is feminine." },
+
+  { id: "test-2-sound", level: 2, skill: "Sounds", prompt: "Listen and find the word.", arabic: "اِسْتَمِعْ", spoken: "مَدْرَسَة", options: [{ label: "مَدْرَسَة", display: "مَدْرَسَة" }, { label: "حَدِيقَة", display: "حَدِيقَة" }, { label: "عَائِلَة", display: "عَائِلَة" }], answer: "مَدْرَسَة", insight: "مَدْرَسَة means school." },
+  { id: "test-2-word", level: 2, skill: "Vocabulary", prompt: "What does this word mean?", arabic: "مَاء", spoken: "مَاء", options: [{ label: "Water", display: "💧" }, { label: "Bread", display: "🥖" }, { label: "Milk", display: "🥛" }], answer: "Water", insight: "مَاء means water." },
+  { id: "test-2-verb", level: 2, skill: "Sentences", prompt: "Complete: I drink water.", arabic: "أَنَا ___ الْمَاءَ", options: [{ label: "أَشْرَبُ", display: "أَشْرَبُ" }, { label: "يَشْرَبُ", display: "يَشْرَبُ" }, { label: "تَشْرَبُ", display: "تَشْرَبُ" }], answer: "أَشْرَبُ", insight: "أَشْرَبُ agrees with أَنَا." },
+  { id: "test-2-reading", level: 2, skill: "Reading", prompt: "Choose the matching sentence.", arabic: "My family is in the garden.", options: [{ label: "عَائِلَتِي فِي الْحَدِيقَةِ", display: "عَائِلَتِي فِي الْحَدِيقَةِ" }, { label: "الْمَدْرَسَةُ فِي الْبَيْتِ", display: "الْمَدْرَسَةُ فِي الْبَيْتِ" }, { label: "أَنَا أَشْرَبُ الْمَاءَ", display: "أَنَا أَشْرَبُ الْمَاءَ" }], answer: "عَائِلَتِي فِي الْحَدِيقَةِ", insight: "فِي means in, and عَائِلَتِي means my family." },
+
+  { id: "test-3-question", level: 3, skill: "Sentences", prompt: "Choose the question about a place.", arabic: "Where is the library?", options: [{ label: "أَيْنَ الْمَكْتَبَةُ؟", display: "أَيْنَ الْمَكْتَبَةُ؟" }, { label: "مَتَى نَقْرَأُ؟", display: "مَتَى نَقْرَأُ؟" }, { label: "كَيْفَ حَالُكَ؟", display: "كَيْفَ حَالُكَ؟" }], answer: "أَيْنَ الْمَكْتَبَةُ؟", insight: "أَيْنَ asks where." },
+  { id: "test-3-word", level: 3, skill: "Vocabulary", prompt: "Choose the meaning.", arabic: "صَدِيق", spoken: "صَدِيق", options: [{ label: "Friend", display: "Friend" }, { label: "Teacher", display: "Teacher" }, { label: "Neighbourhood", display: "Neighbourhood" }], answer: "Friend", insight: "صَدِيق means friend." },
+  { id: "test-3-sentence", level: 3, skill: "Sounds", prompt: "Listen and choose the sentence you hear.", arabic: "اِسْتَمِعْ", spoken: "أَنَا أُحِبُّ الْقِرَاءَةَ", options: [{ label: "أَنَا أُحِبُّ الْقِرَاءَةَ", display: "أَنَا أُحِبُّ الْقِرَاءَةَ" }, { label: "هُوَ يُحِبُّ الْكِتَابَةَ", display: "هُوَ يُحِبُّ الْكِتَابَةَ" }, { label: "هِيَ تَقْرَأُ الْقِصَّةَ", display: "هِيَ تَقْرَأُ الْقِصَّةَ" }], answer: "أَنَا أُحِبُّ الْقِرَاءَةَ", insight: "The opening أَنَا and the verb أُحِبُّ identify the sentence." },
+  { id: "test-3-reading", level: 3, skill: "Reading", prompt: "What happened first?", arabic: "ذَهَبَ عُمَرُ إِلَى السُّوقِ، ثُمَّ عَادَ إِلَى الْبَيْتِ.", options: [{ label: "He went to the market", display: "He went to the market" }, { label: "He returned home", display: "He returned home" }, { label: "He opened a book", display: "He opened a book" }], answer: "He went to the market", insight: "ذَهَبَ appears before ثُمَّ عَادَ." },
+
+  { id: "test-4-connector", level: 4, skill: "Sentences", prompt: "Which connector means “when” here?", arabic: "___ تَوَقَّفَ الْمَطَرُ خَرَجْنَا", options: [{ label: "عِنْدَمَا", display: "عِنْدَمَا" }, { label: "لَكِنْ", display: "لَكِنْ" }, { label: "لِأَنَّ", display: "لِأَنَّ" }], answer: "عِنْدَمَا", insight: "عِنْدَمَا connects an event to its time." },
+  { id: "test-4-word", level: 4, skill: "Vocabulary", prompt: "Choose the closest meaning.", arabic: "مُغَامَرَة", spoken: "مُغَامَرَة", options: [{ label: "Adventure", display: "Adventure" }, { label: "Memory", display: "Memory" }, { label: "Knowledge", display: "Knowledge" }], answer: "Adventure", insight: "مُغَامَرَة means adventure." },
+  { id: "test-4-cause", level: 4, skill: "Sounds", prompt: "Listen and choose the connector you hear.", arabic: "اِسْتَمِعْ", spoken: "قَرَأْتُ الْقِصَّةَ لِأَنَّهَا مُشَوِّقَةٌ", options: [{ label: "لِأَنَّهَا", display: "لِأَنَّهَا" }, { label: "ثُمَّ", display: "ثُمَّ" }, { label: "وَلَكِنَّهَا", display: "وَلَكِنَّهَا" }], answer: "لِأَنَّهَا", insight: "لِأَنَّهَا introduces the reason the story was read." },
+  { id: "test-4-reading", level: 4, skill: "Reading", prompt: "What is the main action?", arabic: "وَجَدَتْ سَلْمَى رِسَالَةً فَبَدَأَتْ حَمْلَةً لِحِمَايَةِ الْبَحْرِ.", options: [{ label: "She began a sea campaign", display: "She began a sea campaign" }, { label: "She bought a boat", display: "She bought a boat" }, { label: "She hid the letter", display: "She hid the letter" }], answer: "She began a sea campaign", insight: "بَدَأَتْ حَمْلَةً means she began a campaign." },
+
+  { id: "test-5-word", level: 5, skill: "Vocabulary", prompt: "Choose the meaning.", arabic: "تَعَاوُن", spoken: "تَعَاوُن", options: [{ label: "Cooperation", display: "Cooperation" }, { label: "Environment", display: "Environment" }, { label: "Future", display: "Future" }], answer: "Cooperation", insight: "تَعَاوُن means cooperation." },
+  { id: "test-5-contrast", level: 5, skill: "Sentences", prompt: "Choose the best contrast connector.", arabic: "الرِّحْلَةُ طَوِيلَةٌ، ___ مُمْتِعَةٌ", options: [{ label: "لَكِنَّهَا", display: "لَكِنَّهَا" }, { label: "لِأَنَّهَا", display: "لِأَنَّهَا" }, { label: "عِنْدَمَا", display: "عِنْدَمَا" }], answer: "لَكِنَّهَا", insight: "لَكِنَّهَا contrasts two descriptions of the journey." },
+  { id: "test-5-future", level: 5, skill: "Sounds", prompt: "Listen and choose the sentence you hear.", arabic: "اِسْتَمِعْ", spoken: "سَوْفَ نَبْنِي مَدْرَسَةً جَدِيدَةً", options: [{ label: "سَوْفَ نَبْنِي مَدْرَسَةً جَدِيدَةً", display: "سَوْفَ نَبْنِي مَدْرَسَةً جَدِيدَةً" }, { label: "بَنَيْنَا مَدْرَسَةً أَمْسِ", display: "بَنَيْنَا مَدْرَسَةً أَمْسِ" }, { label: "نَحْنُ فِي الْمَدْرَسَةِ", display: "نَحْنُ فِي الْمَدْرَسَةِ" }], answer: "سَوْفَ نَبْنِي مَدْرَسَةً جَدِيدَةً", insight: "The spoken marker سَوْفَ points to a future action." },
+  { id: "test-5-reading", level: 5, skill: "Reading", prompt: "Why did the students combine their plans?", arabic: "جَمَعَ الطُّلَّابُ الْفِكْرَتَيْنِ لِيَصِلُوا إِلَى حَلٍّ أَفْضَلَ.", options: [{ label: "To reach a better solution", display: "To reach a better solution" }, { label: "To finish more quickly", display: "To finish more quickly" }, { label: "To avoid writing", display: "To avoid writing" }], answer: "To reach a better solution", insight: "لِيَصِلُوا إِلَى حَلٍّ أَفْضَلَ states the purpose." },
+
+  { id: "test-6-word", level: 6, skill: "Vocabulary", prompt: "Choose the meaning.", arabic: "خَيَال", spoken: "خَيَال", options: [{ label: "Imagination", display: "Imagination" }, { label: "Responsibility", display: "Responsibility" }, { label: "Exploration", display: "Exploration" }], answer: "Imagination", insight: "خَيَال means imagination." },
+  { id: "test-6-pattern", level: 6, skill: "Sentences", prompt: "Complete the proportional pattern.", arabic: "كُلَّمَا قَرَأْنَا ___ لُغَتُنَا ثَرَاءً", options: [{ label: "ازْدَادَتْ", display: "ازْدَادَتْ" }, { label: "تَوَقَّفَتْ", display: "تَوَقَّفَتْ" }, { label: "نَسِيَتْ", display: "نَسِيَتْ" }], answer: "ازْدَادَتْ", insight: "كُلَّمَا… ازْدَادَتْ expresses that one change grows with another." },
+  { id: "test-6-image", level: 6, skill: "Sounds", prompt: "Listen and identify the comparison word.", arabic: "اِسْتَمِعْ", spoken: "الْمَدِينَةُ كَأَنَّهَا لَوْحَةٌ حَيَّةٌ", options: [{ label: "كَأَنَّهَا", display: "كَأَنَّهَا" }, { label: "لِذَلِكَ", display: "لِذَلِكَ" }, { label: "مَهْمَا", display: "مَهْمَا" }], answer: "كَأَنَّهَا", insight: "كَأَنَّهَا creates the imagined comparison." },
+  { id: "test-6-reading", level: 6, skill: "Reading", prompt: "What idea does the sentence express?", arabic: "الْمَسْؤُولِيَّةُ لَيْسَتْ عِبْئًا، بَلْ فُرْصَةٌ لِنَصْنَعَ فَرْقًا.", options: [{ label: "Responsibility can create positive change", display: "Responsibility can create positive change" }, { label: "Responsibility should be avoided", display: "Responsibility should be avoided" }, { label: "Only adults have responsibility", display: "Only adults have responsibility" }], answer: "Responsibility can create positive change", insight: "بَلْ shifts from a negative view to a positive one." },
+];
+
+export type DictationExercise = {
+  id: string;
+  level: number;
+  text: string;
+  meaning: string;
+  hint: string;
+  kind: "Word" | "Phrase" | "Sentence";
+};
+
+export const dictationExercises: DictationExercise[] = [
+  { id: "dictation-1-moon", level: 1, text: "قَمَر", meaning: "moon", hint: "Three letters. It begins with ق.", kind: "Word" },
+  { id: "dictation-1-book", level: 1, text: "كِتَاب", meaning: "book", hint: "It begins with ك and contains ا.", kind: "Word" },
+  { id: "dictation-1-home", level: 1, text: "بَيْت", meaning: "home", hint: "It begins with ب and ends with ت.", kind: "Word" },
+  { id: "dictation-2-water", level: 2, text: "مَاء", meaning: "water", hint: "Listen for the long final sound.", kind: "Word" },
+  { id: "dictation-2-family", level: 2, text: "عَائِلَة", meaning: "family", hint: "It begins with ع and ends with ة.", kind: "Word" },
+  { id: "dictation-2-school", level: 2, text: "مَدْرَسَة", meaning: "school", hint: "Five connected letters, ending in ة.", kind: "Word" },
+  { id: "dictation-3-reading", level: 3, text: "أَنَا أُحِبُّ الْقِرَاءَةَ", meaning: "I love reading.", hint: "Four words. Begin with أَنَا.", kind: "Sentence" },
+  { id: "dictation-3-library", level: 3, text: "أَيْنَ الْمَكْتَبَةُ؟", meaning: "Where is the library?", hint: "A question beginning with أَيْنَ.", kind: "Phrase" },
+  { id: "dictation-3-friend", level: 3, text: "صَدِيقِي فِي الْحَدِيقَةِ", meaning: "My friend is in the garden.", hint: "Three parts: my friend · in · the garden.", kind: "Sentence" },
+  { id: "dictation-4-rain", level: 4, text: "عِنْدَمَا تَوَقَّفَ الْمَطَرُ خَرَجْنَا", meaning: "When the rain stopped, we went out.", hint: "Begin with the connector عِنْدَمَا.", kind: "Sentence" },
+  { id: "dictation-4-adventure", level: 4, text: "الْمُغَامَرَةُ تَبْدَأُ بِسُؤَالٍ", meaning: "The adventure begins with a question.", hint: "Four words. Listen for the letter ؤ in the last word.", kind: "Sentence" },
+  { id: "dictation-4-letter", level: 4, text: "كَتَبَتْ سَلْمَى رِسَالَةً", meaning: "Salma wrote a letter.", hint: "The first verb ends with تْ.", kind: "Sentence" },
+  { id: "dictation-5-cooperation", level: 5, text: "التَّعَاوُنُ يَصْنَعُ حُلُولًا أَفْضَلَ", meaning: "Cooperation creates better solutions.", hint: "Four words. The final word means better.", kind: "Sentence" },
+  { id: "dictation-5-environment", level: 5, text: "الْبِيئَةُ مَسْؤُولِيَّتُنَا جَمِيعًا", meaning: "The environment is everyone's responsibility.", hint: "Listen carefully for ئ in both key words.", kind: "Sentence" },
+  { id: "dictation-5-future", level: 5, text: "سَوْفَ نَبْنِي مَدْرَسَةَ الْمُسْتَقْبَلِ", meaning: "We will build the school of the future.", hint: "Begin with the future marker سَوْفَ.", kind: "Sentence" },
+  { id: "dictation-6-reading", level: 6, text: "كُلَّمَا قَرَأْنَا ازْدَادَتْ لُغَتُنَا ثَرَاءً", meaning: "The more we read, the richer our language becomes.", hint: "Listen for the paired pattern كُلَّمَا… ازْدَادَتْ.", kind: "Sentence" },
+  { id: "dictation-6-imagination", level: 6, text: "الْخَيَالُ يَفْتَحُ أَبْوَابًا جَدِيدَةً", meaning: "Imagination opens new doors.", hint: "Four words, ending with a feminine adjective.", kind: "Sentence" },
+  { id: "dictation-6-opinion", level: 6, text: "أَكْتُبُ رَأْيِي بِوُضُوحٍ وَاحْتِرَامٍ", meaning: "I write my opinion clearly and respectfully.", hint: "Listen for the hamza in رَأْيِي.", kind: "Sentence" },
+];
+
+export const placementQuestions: AssessmentQuestion[] = [
+  { id: "placement-1a", level: 1, skill: "Vocabulary", prompt: "Choose the meaning.", arabic: "قَمَر", spoken: "قَمَر", options: [{ label: "Moon", display: "🌙" }, { label: "Sun", display: "☀️" }, { label: "Book", display: "📘" }], answer: "Moon", insight: "قَمَر means moon." },
+  { id: "placement-1b", level: 1, skill: "Sounds", prompt: "Which letter begins the word?", arabic: "شَمْس", spoken: "شَمْس", options: [{ label: "ش", display: "ش" }, { label: "س", display: "س" }, { label: "م", display: "م" }], answer: "ش", insight: "شَمْس begins with ش." },
+  { id: "placement-2a", level: 2, skill: "Vocabulary", prompt: "Choose the meaning.", arabic: "مَاء", spoken: "مَاء", options: [{ label: "Water", display: "Water" }, { label: "Bread", display: "Bread" }, { label: "House", display: "House" }], answer: "Water", insight: "مَاء means water." },
+  { id: "placement-2b", level: 2, skill: "Sentences", prompt: "Choose: This is my house.", arabic: "This is my house", options: [{ label: "هَذَا بَيْتِي", display: "هَذَا بَيْتِي" }, { label: "هَذِهِ يَدِي", display: "هَذِهِ يَدِي" }, { label: "أَنَا فِي الْبَيْتِ", display: "أَنَا فِي الْبَيْتِ" }], answer: "هَذَا بَيْتِي", insight: "بَيْتِي means my house." },
+  { id: "placement-3a", level: 3, skill: "Sentences", prompt: "Which question asks where?", arabic: "Choose one", options: [{ label: "أَيْنَ الْمَدْرَسَةُ؟", display: "أَيْنَ الْمَدْرَسَةُ؟" }, { label: "مَتَى نَذْهَبُ؟", display: "مَتَى نَذْهَبُ؟" }, { label: "مَنْ هُوَ؟", display: "مَنْ هُوَ؟" }], answer: "أَيْنَ الْمَدْرَسَةُ؟", insight: "أَيْنَ asks about place." },
+  { id: "placement-3b", level: 3, skill: "Sentences", prompt: "Complete: I write a sentence.", arabic: "أَنَا ___ جُمْلَةً", options: [{ label: "أَكْتُبُ", display: "أَكْتُبُ" }, { label: "يَكْتُبُ", display: "يَكْتُبُ" }, { label: "تَكْتُبُ", display: "تَكْتُبُ" }], answer: "أَكْتُبُ", insight: "أَكْتُبُ is the first-person form." },
+  { id: "placement-4a", level: 4, skill: "Sentences", prompt: "Choose the time connector.", arabic: "___ تَوَقَّفَ الْمَطَرُ خَرَجْنَا", options: [{ label: "عِنْدَمَا", display: "عِنْدَمَا" }, { label: "لِأَنَّ", display: "لِأَنَّ" }, { label: "لَكِنْ", display: "لَكِنْ" }], answer: "عِنْدَمَا", insight: "عِنْدَمَا means when." },
+  { id: "placement-4b", level: 4, skill: "Reading", prompt: "Why did Salma begin a campaign?", arabic: "بَدَأَتْ سَلْمَى حَمْلَةً لِحِمَايَةِ الْبَحْرِ.", options: [{ label: "To protect the sea", display: "To protect the sea" }, { label: "To sell a boat", display: "To sell a boat" }, { label: "To write a map", display: "To write a map" }], answer: "To protect the sea", insight: "لِحِمَايَةِ الْبَحْرِ gives the purpose." },
+  { id: "placement-5a", level: 5, skill: "Vocabulary", prompt: "Choose the meaning.", arabic: "تَعَاوُن", options: [{ label: "Cooperation", display: "Cooperation" }, { label: "Exploration", display: "Exploration" }, { label: "Imagination", display: "Imagination" }], answer: "Cooperation", insight: "تَعَاوُن means cooperation." },
+  { id: "placement-5b", level: 5, skill: "Sentences", prompt: "Choose the contrast connector.", arabic: "الطَّرِيقُ طَوِيلٌ، ___ جَمِيلٌ", options: [{ label: "لَكِنَّهُ", display: "لَكِنَّهُ" }, { label: "لِأَنَّهُ", display: "لِأَنَّهُ" }, { label: "عِنْدَمَا", display: "عِنْدَمَا" }], answer: "لَكِنَّهُ", insight: "لَكِنَّهُ introduces contrast." },
+  { id: "placement-6a", level: 6, skill: "Sentences", prompt: "Complete the paired pattern.", arabic: "كُلَّمَا تَدَرَّبْنَا ___ ثِقَتُنَا", options: [{ label: "ازْدَادَتْ", display: "ازْدَادَتْ" }, { label: "نَسِيَتْ", display: "نَسِيَتْ" }, { label: "تَوَقَّفَتْ", display: "تَوَقَّفَتْ" }], answer: "ازْدَادَتْ", insight: "كُلَّمَا… ازْدَادَتْ links two growing changes." },
+  { id: "placement-6b", level: 6, skill: "Reading", prompt: "Choose the best interpretation.", arabic: "الْمَسْؤُولِيَّةُ فُرْصَةٌ لِنَصْنَعَ فَرْقًا.", options: [{ label: "Responsibility lets us make a difference", display: "Responsibility lets us make a difference" }, { label: "Responsibility is impossible", display: "Responsibility is impossible" }, { label: "Responsibility belongs to others", display: "Responsibility belongs to others" }], answer: "Responsibility lets us make a difference", insight: "The sentence presents responsibility as a positive opportunity." },
+];

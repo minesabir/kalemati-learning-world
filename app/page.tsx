@@ -11,6 +11,11 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import {
+  assessmentQuestions,
+  dictationExercises,
+  placementQuestions,
+} from "./assessments";
+import {
   coloringScenes,
   gameRounds,
   letters,
@@ -33,6 +38,9 @@ type ViewId =
   | "copybook"
   | "coloring"
   | "games"
+  | "tests"
+  | "dictation"
+  | "placement"
   | "teacher";
 
 type ResultState = "idle" | "right" | "try";
@@ -98,6 +106,14 @@ const navGroups: {
       { id: "coloring", icon: "✿", label: "Color Studio" },
       { id: "games", icon: "◆", label: "Game Meadow" },
       { id: "teacher", icon: "☏", label: "Meet a Teacher" },
+    ],
+  },
+  {
+    label: "Check & Grow",
+    items: [
+      { id: "tests", icon: "◫", label: "Test Centre" },
+      { id: "dictation", icon: "✐", label: "Dictation Lab" },
+      { id: "placement", icon: "◎", label: "Level Compass" },
     ],
   },
 ];
@@ -288,6 +304,15 @@ function drawPaintStrokes(
   });
 }
 
+function normalizeArabic(value: string) {
+  return value
+    .normalize("NFC")
+    .replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, "")
+    .replace(/[أإآٱ]/g, "ا")
+    .replace(/[؟،؛.!,:\s]/g, "")
+    .trim();
+}
+
 export default function Home() {
   const [view, setView] = useState<ViewId>("home");
   const [soundOn, setSoundOn] = useState(true);
@@ -312,6 +337,21 @@ export default function Home() {
   const [artMessage, setArtMessage] = useState("");
   const [gameIndex, setGameIndex] = useState(0);
   const [gameResult, setGameResult] = useState<ResultState>("idle");
+  const [testIndex, setTestIndex] = useState(0);
+  const [testAnswers, setTestAnswers] = useState<Record<string, string>>({});
+  const [testFinished, setTestFinished] = useState(false);
+  const [dictationIndex, setDictationIndex] = useState(0);
+  const [dictationInput, setDictationInput] = useState("");
+  const [dictationResult, setDictationResult] = useState<ResultState>("idle");
+  const [showDictationHint, setShowDictationHint] = useState(false);
+  const [placementStarted, setPlacementStarted] = useState(false);
+  const [placementIndex, setPlacementIndex] = useState(0);
+  const [placementAnswers, setPlacementAnswers] = useState<Record<string, string>>({});
+  const [placementResult, setPlacementResult] = useState<{
+    level: number;
+    correct: number;
+    score: number;
+  } | null>(null);
   const [teacherSlot, setTeacherSlot] = useState("");
   const [lessonFocus, setLessonFocus] = useState("Conversation confidence");
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
@@ -451,6 +491,13 @@ export default function Home() {
     setStoryAnswer("");
     setGameIndex(0);
     setGameResult("idle");
+    setTestIndex(0);
+    setTestAnswers({});
+    setTestFinished(false);
+    setDictationIndex(0);
+    setDictationInput("");
+    setDictationResult("idle");
+    setShowDictationHint(false);
     setBuiltLetters([]);
     setWordResult("idle");
     setLearner((item) => ({ ...item, currentLevel: level }));
@@ -623,6 +670,73 @@ export default function Home() {
   const levelGames = gameRounds.filter((item) => item.level === activeLevel);
   const game = levelGames[gameIndex % levelGames.length];
 
+  const levelTests = assessmentQuestions.filter((item) => item.level === activeLevel);
+  const testQuestion = levelTests[testIndex % levelTests.length];
+  const testCorrect = levelTests.filter(
+    (item) => testAnswers[item.id] === item.answer,
+  ).length;
+  const testScore = Math.round((testCorrect / levelTests.length) * 100);
+  const levelDictations = dictationExercises.filter((item) => item.level === activeLevel);
+  const dictation = levelDictations[dictationIndex % levelDictations.length];
+  const completedDictations = levelDictations.filter((item) => completedIds.has(item.id)).length;
+
+  const advanceLevelTest = async () => {
+    if (!testAnswers[testQuestion.id]) return;
+    if (testIndex < levelTests.length - 1) {
+      setTestIndex((index) => index + 1);
+      return;
+    }
+    setTestFinished(true);
+    await recordProgress(`checkpoint-level-${activeLevel}`, "tests", testScore);
+  };
+
+  const restartLevelTest = () => {
+    setTestIndex(0);
+    setTestAnswers({});
+    setTestFinished(false);
+  };
+
+  const checkDictation = async () => {
+    if (!dictationInput.trim()) return;
+    const right = normalizeArabic(dictationInput) === normalizeArabic(dictation.text);
+    setDictationResult(right ? "right" : "try");
+    if (right) {
+      speak(dictation.text);
+      await recordProgress(dictation.id, "dictation", 100);
+    }
+  };
+
+  const nextDictation = () => {
+    setDictationIndex((index) => (index + 1) % levelDictations.length);
+    setDictationInput("");
+    setDictationResult("idle");
+    setShowDictationHint(false);
+  };
+
+  const answerPlacement = async (option: string) => {
+    const question = placementQuestions[placementIndex];
+    const nextAnswers = { ...placementAnswers, [question.id]: option };
+    setPlacementAnswers(nextAnswers);
+    if (placementIndex < placementQuestions.length - 1) {
+      setPlacementIndex((index) => index + 1);
+      return;
+    }
+    const correct = placementQuestions.filter(
+      (item) => nextAnswers[item.id] === item.answer,
+    ).length;
+    const score = Math.round((correct / placementQuestions.length) * 100);
+    const level = Math.min(6, Math.max(1, Math.floor(correct / 2) + 1));
+    setPlacementResult({ level, correct, score });
+    await recordProgress("placement-compass", "placement", score);
+  };
+
+  const restartPlacement = () => {
+    setPlacementStarted(true);
+    setPlacementIndex(0);
+    setPlacementAnswers({});
+    setPlacementResult(null);
+  };
+
   const visibleWords = words.filter(
     (item) =>
       item.level <= activeLevel &&
@@ -750,7 +864,7 @@ export default function Home() {
               <p className="eyebrow">Complete Arabic pathway</p>
               <h2>Six worlds, one connected curriculum</h2>
             </div>
-            <span className="curriculum-count">120+ guided activities</span>
+            <span className="curriculum-count">170+ guided activities</span>
           </div>
           <div className="level-roadmap">
             {levels.map((level) => (
@@ -790,6 +904,28 @@ export default function Home() {
               <div className="mini-meter"><i style={{ width: `${Number(skill[2]) || 8}%` }} /></div>
             </button>
           ))}
+        </section>
+
+        <section className="panel assessment-gateway">
+          <div className="assessment-gateway-copy">
+            <span className="assessment-compass">◎</span>
+            <div>
+              <p className="eyebrow">A calm way to check growth</p>
+              <h2>Three new portals for confident progress</h2>
+              <p>Short checkpoints, listen-and-write practice, and a full pathway recommendation.</p>
+            </div>
+          </div>
+          <div className="assessment-gateway-cards">
+            <button onClick={() => goTo("tests")}>
+              <span>◫</span><div><small>Level {activeLevel}</small><strong>Test Centre</strong><em>{trackScore("tests") || "Ready"}{trackScore("tests") ? "% best" : ""}</em></div><i>→</i>
+            </button>
+            <button onClick={() => goTo("dictation")}>
+              <span>✐</span><div><small>Listen & write</small><strong>Dictation Lab</strong><em>{completedDictations}/{levelDictations.length} mastered</em></div><i>→</i>
+            </button>
+            <button onClick={() => goTo("placement")}>
+              <span>◎</span><div><small>12 adaptive questions</small><strong>Level Compass</strong><em>{trackScore("placement") ? `${trackScore("placement")}% latest` : "Find my pathway"}</em></div><i>→</i>
+            </button>
+          </div>
         </section>
 
         <section className="split-cards expanded-quick-actions">
@@ -1005,6 +1141,95 @@ export default function Home() {
     </div>
   );
 
+  const renderTests = () => {
+    const selectedAnswer = testAnswers[testQuestion.id];
+    return (
+      <div className="page-stack">
+        {pageHeader("Understand what has grown", "Test Centre", "A four-part checkpoint for the current level. Results are saved without timers, pressure, or penalties.", "اِخْتِبَار")}
+        <section className="assessment-overview panel">
+          <div><p className="eyebrow">Level {activeLevel} checkpoint</p><h2>Four skills · one gentle picture</h2><p>Each question checks a different part of the learning journey.</p></div>
+          <div className="assessment-skill-cards">
+            {["Sounds", "Vocabulary", "Sentences", "Reading"].map((skill, index) => {
+              const questions = levelTests.filter((item) => item.skill === skill);
+              const correct = questions.filter((item) => testAnswers[item.id] === item.answer).length;
+              return <div key={skill} className={testFinished && correct === questions.length ? "complete" : ""}><span>{["♪", "ك", "≋", "◐"][index]}</span><strong>{skill}</strong><small>{testFinished ? `${correct}/${questions.length}` : `${questions.length} question${questions.length === 1 ? "" : "s"}`}</small></div>;
+            })}
+          </div>
+        </section>
+
+        {!testFinished ? <>
+          <section className="assessment-progress panel">
+            <div><span style={{ width: `${((testIndex + 1) / levelTests.length) * 100}%` }} /></div>
+            <strong>Question {testIndex + 1} of {levelTests.length}</strong>
+            <em>{testQuestion.skill}</em>
+          </section>
+          <section className="test-stage panel">
+            <div className="test-stage-heading"><span className="test-glyph">{testQuestion.skill === "Sounds" ? "♪" : testQuestion.skill === "Vocabulary" ? "✦" : testQuestion.skill === "Sentences" ? "≋" : "◐"}</span><div><p className="eyebrow">{testQuestion.skill} gate</p><h2>{testQuestion.prompt}</h2></div>{testQuestion.spoken && <button className="round-button" onClick={() => speak(testQuestion.spoken!)} aria-label="Listen to the Arabic prompt">♪</button>}</div>
+            <div className="test-arabic arabic" dir="rtl">{testQuestion.arabic}</div>
+            <div className="assessment-options">{testQuestion.options.map((option) => <button key={option.label} className={selectedAnswer === option.label ? "selected" : ""} onClick={() => setTestAnswers((answers) => ({ ...answers, [testQuestion.id]: option.label }))}><span className="arabic">{option.display}</span><small>{option.label !== option.display ? option.label : "Choose this answer"}</small><i>{selectedAnswer === option.label ? "✓" : ""}</i></button>)}</div>
+            <div className="test-stage-footer"><p>{selectedAnswer ? "Answer held. You can change it before moving on." : "Take your time. Nothing is timed here."}</p><button className="primary-button" disabled={!selectedAnswer} onClick={advanceLevelTest}>{testIndex === levelTests.length - 1 ? "Finish checkpoint" : "Next question →"}</button></div>
+          </section>
+        </> : <>
+          <section className={`test-result panel ${testScore >= 75 ? "strong" : "growing"}`}>
+            <div className="result-orbit" style={{ "--score": `${testScore}%` } as CSSProperties}><strong>{testScore}%</strong><span>checkpoint</span></div>
+            <div><p className="eyebrow">Level {activeLevel} result saved</p><h2>{testScore >= 75 ? "This pathway feels well matched." : "A little more practice will make this level feel lighter."}</h2><p>{testCorrect} of {levelTests.length} answers were correct. The result is a guide, never a label.</p><div className="result-actions"><button className="small-button secondary" onClick={restartLevelTest}>Try again</button><button className="primary-button" onClick={() => goTo(testScore >= 75 ? "dictation" : activeLevel <= 2 ? "words" : "sentences")}>{testScore >= 75 ? "Continue to dictation →" : "Practise this level →"}</button></div></div>
+          </section>
+          <section className="answer-review panel"><div><p className="eyebrow">Answer map</p><h2>See the pattern, not just the score</h2></div>{levelTests.map((question, index) => { const right = testAnswers[question.id] === question.answer; return <div key={question.id} className={right ? "right" : "try"}><span>{right ? "✓" : index + 1}</span><div><strong>{question.skill}</strong><p>{question.insight}</p></div><em>{right ? "Mastered" : "Review"}</em></div>; })}</section>
+        </>}
+      </div>
+    );
+  };
+
+  const renderDictation = () => (
+    <div className="page-stack">
+      {pageHeader("Listen · hold · write", "Dictation Lab", "A focused Arabic listening space that accepts answers with or without vowel marks and saves every mastered card.", "إِمْلَاء")}
+      <section className="dictation-path panel">
+        <div><p className="eyebrow">Level {activeLevel} sound path</p><h2>{completedDictations} of {levelDictations.length} cards mastered</h2></div>
+        <div>{levelDictations.map((item, index) => <button key={item.id} className={`${index === dictationIndex ? "active" : ""} ${completedIds.has(item.id) ? "complete" : ""}`} onClick={() => { setDictationIndex(index); setDictationInput(""); setDictationResult("idle"); setShowDictationHint(false); }}><span>{completedIds.has(item.id) ? "✓" : index + 1}</span><strong>{item.kind}</strong><small>{item.meaning}</small></button>)}</div>
+      </section>
+      <section className={`dictation-stage panel ${dictationResult}`}>
+        <div className="sound-portal"><button onClick={() => speak(dictation.text)} aria-label="Play the dictation"><span>♪</span><i /><i /><i /></button><p>Tap to listen in Arabic</p><small>Listen as many times as you need</small></div>
+        <form onSubmit={(event) => { event.preventDefault(); void checkDictation(); }}>
+          <p className="eyebrow">{dictation.kind} · {dictation.meaning}</p>
+          <h2>Write exactly what you hear.</h2>
+          <label><span>Arabic answer</span><textarea className="arabic" dir="rtl" value={dictationInput} onChange={(event) => { setDictationInput(event.target.value); setDictationResult("idle"); }} placeholder="اكتب ما تسمع هنا" aria-label="Write the Arabic dictation answer" /></label>
+          <div className="dictation-tools"><button type="button" className="hint-button" onClick={() => setShowDictationHint((value) => !value)}>☼ {showDictationHint ? "Hide clue" : "Gentle clue"}</button><span>Vowel marks are optional.</span></div>
+          {showDictationHint && <p className="dictation-hint">{dictation.hint}</p>}
+          {dictationResult === "right" && <div className="dictation-feedback right"><span>✓</span><div><strong>Beautiful listening.</strong><p className="arabic" dir="rtl">{dictation.text}</p></div></div>}
+          {dictationResult === "try" && <div className="dictation-feedback try"><span>↻</span><div><strong>Very close. Listen once more.</strong><p>Compare the sounds slowly, then change only what you notice.</p></div></div>}
+          <div className="dictation-footer"><button type="button" className="text-button" onClick={() => speak(dictation.text)}>Play slowly again ♪</button>{dictationResult === "right" ? <button type="button" className="primary-button" onClick={nextDictation}>Next sound card →</button> : <button className="primary-button" disabled={!dictationInput.trim()}>Check my writing</button>}</div>
+        </form>
+      </section>
+      <section className="dictation-method panel"><div><span>1</span><strong>Listen</strong><p>Hear the whole word or sentence without writing.</p></div><div><span>2</span><strong>Hold</strong><p>Say it quietly and notice its rhythm.</p></div><div><span>3</span><strong>Write</strong><p>Write, check, and listen again with curiosity.</p></div></section>
+    </div>
+  );
+
+  const renderPlacement = () => {
+    const question = placementQuestions[placementIndex];
+    if (!placementStarted) {
+      return <div className="page-stack">
+        {pageHeader("Find the right beginning", "Level Compass", "A short adaptive journey across sounds, vocabulary, sentences, and reading. It recommends a starting point without locking any content.", "مُسْتَوَايَ")}
+        <section className="placement-welcome panel"><div className="compass-art"><span>ك</span><i /><i /><i /><i /><b>◎</b></div><div><span className="soft-pill">12 questions · about 6 minutes</span><h2>Let Arabic show us where to begin.</h2><p>The questions grow gradually from first sounds to rich reading. It is completely fine not to know an answer—the compass becomes more accurate when the learner answers honestly.</p><ul><li>No timer and no negative score</li><li>Audio can be replayed</li><li>All six pathways remain open</li><li>The recommendation can be changed by a parent</li></ul><button className="primary-button" onClick={restartPlacement}>Start my level check →</button></div></section>
+        <section className="placement-levels">{levels.map((level) => <div key={level.id} className={level.color}><span>{level.id}</span><strong>{level.name}</strong><small>{level.cefr}</small><p>{level.focus.slice(0, 2).join(" · ")}</p></div>)}</section>
+      </div>;
+    }
+
+    if (placementResult) {
+      const recommended = levels[placementResult.level - 1];
+      return <div className="page-stack">
+        {pageHeader("Your learning starting point", "Compass Result", "A pathway recommendation based on the complete six-level check.", "مَسَارِي")}
+        <section className={`placement-result panel ${recommended.color}`}><div className="placement-result-level"><span>{placementResult.level}</span><small>{recommended.cefr}</small></div><div><p className="eyebrow">Recommended starting pathway</p><h2>{recommended.name}</h2><h3 className="arabic" dir="rtl">{recommended.arabic}</h3><p>{recommended.promise}</p><div className="result-actions"><button className="small-button secondary" onClick={restartPlacement}>Take it again</button><button className="primary-button" onClick={async () => { await selectLevel(placementResult.level); goTo("home"); }}>Use this pathway →</button></div></div><div className="placement-score"><strong>{placementResult.correct}/{placementQuestions.length}</strong><span>answers</span><em>{placementResult.score}%</em></div></section>
+        <section className="placement-map panel"><div><p className="eyebrow">Your answer trail</p><h2>How the recommendation was shaped</h2></div><div>{levels.map((level) => { const questions = placementQuestions.filter((item) => item.level === level.id); const right = questions.filter((item) => placementAnswers[item.id] === item.answer).length; return <div key={level.id} className={`${level.color} ${level.id === placementResult.level ? "recommended" : ""}`}><span>{level.id}</span><strong>{level.name}</strong><div>{questions.map((item) => <i key={item.id} className={placementAnswers[item.id] === item.answer ? "right" : "try"} />)}</div><small>{right}/2</small></div>; })}</div><p>The compass recommends the first pathway that offers both confidence and meaningful challenge.</p></section>
+      </div>;
+    }
+
+    return <div className="page-stack">
+      {pageHeader("Question by question", "Level Compass", "Answer what you know and make your best guess when something feels new.", "مُسْتَوَايَ")}
+      <section className="placement-progress panel"><div><span style={{ width: `${((placementIndex + 1) / placementQuestions.length) * 100}%` }} /></div><strong>{placementIndex + 1} / {placementQuestions.length}</strong><em>Exploring Level {question.level} · {levels[question.level - 1].cefr}</em></section>
+      <section className="placement-question panel"><div className="placement-question-top"><span>Level {question.level}</span><button className="text-button" onClick={restartPlacement}>Start again</button></div><div className="placement-prompt"><p className="eyebrow">{question.skill}</p><h2>{question.prompt}</h2><strong className="arabic" dir="rtl">{question.arabic}</strong>{question.spoken && <button className="round-button" onClick={() => speak(question.spoken!)} aria-label="Listen to the Arabic question">♪</button>}</div><div className="assessment-options placement-options">{question.options.map((option) => <button key={option.label} onClick={() => void answerPlacement(option.label)}><span className="arabic">{option.display}</span><small>{option.label !== option.display ? option.label : "Choose this answer"}</small><i>→</i></button>)}</div><p className="placement-reassurance">There is no “bad” result. Every answer helps choose a kinder starting point.</p></section>
+    </div>;
+  };
+
   const renderTeacher = () => (
     <div className="page-stack">
       {pageHeader("Human guidance, exactly when useful", "Meet a Teacher", "Request a focused live lesson, choose the learning goal, and keep the request in the parent account.", "مُعَلِّمَتِي")}
@@ -1025,6 +1250,9 @@ export default function Home() {
     if (view === "copybook") return renderCopybook();
     if (view === "coloring") return renderColoring();
     if (view === "games") return renderGames();
+    if (view === "tests") return renderTests();
+    if (view === "dictation") return renderDictation();
+    if (view === "placement") return renderPlacement();
     if (view === "teacher") return renderTeacher();
     return renderHome();
   };
@@ -1065,6 +1293,9 @@ export default function Home() {
               ["◐", "Story Thinker", `${progress.filter((item) => item.track === "stories").length} stories`],
               ["✎", "Careful Hand", `${progress.filter((item) => item.track === "copybook").length} pages`],
               ["✿", "Word Artist", `${Object.values(coloringBook).filter((item) => item.length).length} artworks`],
+              ["◫", "Calm Checker", `${progress.filter((item) => item.track === "tests").length} checkpoints`],
+              ["✐", "Sound Scribe", `${progress.filter((item) => item.track === "dictation").length} dictations`],
+              ["◎", "Path Finder", trackScore("placement") ? `${trackScore("placement")}% result` : "Ready to begin"],
             ].map((badge, index) => <div className={index === 0 && progress.length < 2 ? "new" : ""} key={badge[1]}><span className={index === 1 ? "arabic" : ""}>{badge[0]}</span><strong>{badge[1]}</strong><small>{badge[2]}</small></div>)}</div>
             <button className="primary-button full" onClick={() => setShowAchievements(false)}>Keep exploring</button>
           </section>
@@ -1079,8 +1310,8 @@ export default function Home() {
             <div className="parent-tabs"><button className={parentTab === "progress" ? "active" : ""} onClick={() => setParentTab("progress")}>Progress</button><button className={parentTab === "content" ? "active" : ""} onClick={() => setParentTab("content")}>Content Studio</button><button className={parentTab === "account" ? "active" : ""} onClick={() => setParentTab("account")}>Account</button></div>
 
             {parentTab === "progress" && <>
-              <div className="parent-metrics"><div><span>{learner.xp} XP</span><small>Total learning growth</small><em>Level {activeLevel} · {activeLevelInfo.cefr}</em></div><div><span>{progress.length}</span><small>Activities remembered</small><em>{completedHomework}/5 homework tasks</em></div><div><span>{Object.values(coloringBook).filter((item) => item.length).length}</span><small>Saved artworks</small><em>{bookings.length} lesson requests</em></div></div>
-              <div className="parent-detail-grid"><section><div className="section-title-row compact"><div><p className="eyebrow">Skill balance</p><h3>Where growth is strongest</h3></div></div><div className="skill-bars">{[["Letters", trackScore("letters")], ["Words", trackScore("words")], ["Sentences", trackScore("sentences")], ["Stories", trackScore("stories")]].map((item) => <div key={String(item[0])}><span>{item[0]}</span><div><i style={{ width: `${Number(item[1]) || 6}%` }} /></div><strong>{Number(item[1]) || 0}%</strong></div>)}</div></section><section className="teacher-note"><p className="eyebrow">Adaptive recommendation</p><blockquote>“Keep the next week balanced: two sentence challenges, one story, and one creative page. The app will remember each result.”</blockquote><button className="text-button" onClick={() => { setShowParent(false); goTo("teacher"); }}>Plan a live lesson →</button></section></div>
+              <div className="parent-metrics"><div><span>{learner.xp} XP</span><small>Total learning growth</small><em>Level {activeLevel} · {activeLevelInfo.cefr}</em></div><div><span>{progress.length}</span><small>Activities remembered</small><em>{completedHomework}/5 homework tasks</em></div><div><span>{Object.values(coloringBook).filter((item) => item.length).length}</span><small>Saved artworks</small><em>{bookings.length} lesson requests</em></div><div><span>{progress.filter((item) => ["tests", "dictation", "placement"].includes(item.track)).length}</span><small>Assessment records</small><em>{completedDictations}/{levelDictations.length} dictations at this level</em></div></div>
+              <div className="parent-detail-grid"><section><div className="section-title-row compact"><div><p className="eyebrow">Skill balance</p><h3>Where growth is strongest</h3></div></div><div className="skill-bars">{[["Letters", trackScore("letters")], ["Words", trackScore("words")], ["Sentences", trackScore("sentences")], ["Stories", trackScore("stories")], ["Tests", trackScore("tests")], ["Dictation", trackScore("dictation")]].map((item) => <div key={String(item[0])}><span>{item[0]}</span><div><i style={{ width: `${Number(item[1]) || 6}%` }} /></div><strong>{Number(item[1]) || 0}%</strong></div>)}</div></section><section className="teacher-note"><p className="eyebrow">Adaptive recommendation</p><blockquote>“Use the checkpoint and dictation results together: one shows understanding, while the other reveals listening and spelling confidence.”</blockquote><button className="text-button" onClick={() => { setShowParent(false); goTo("tests"); }}>Open the Test Centre →</button></section></div>
             </>}
 
             {parentTab === "content" && <div className="content-studio">

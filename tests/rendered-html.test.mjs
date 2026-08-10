@@ -37,14 +37,18 @@ test("server-renders the complete Kalemati learning world", async () => {
   assert.match(html, /Color Studio/);
   assert.match(html, /Parent Space/);
   assert.match(html, /Meet a Teacher/);
+  assert.match(html, /Test Centre/);
+  assert.match(html, /Dictation Lab/);
+  assert.match(html, /Level Compass/);
   assert.match(html, /كَلِماتي/);
   assert.doesNotMatch(html, /bird|hoopoe|mascot|duolingo/i);
 });
 
 test("ships levelled curriculum, persistence, and extensible content", async () => {
-  const [page, curriculum, schema, hosting] = await Promise.all([
+  const [page, curriculum, assessments, schema, hosting] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/curriculum.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/assessments.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
   ]);
@@ -55,7 +59,14 @@ test("ships levelled curriculum, persistence, and extensible content", async () 
   assert.match(curriculum, /export const gameRounds/);
   assert.match(page, /<canvas/);
   assert.match(page, /Content Studio/);
+  assert.match(page, /renderTests/);
+  assert.match(page, /renderDictation/);
+  assert.match(page, /renderPlacement/);
   assert.match(page, /\/api\/learning/);
+  assert.match(assessments, /export const assessmentQuestions/);
+  assert.match(assessments, /export const dictationExercises/);
+  assert.match(assessments, /export const placementQuestions/);
+  assert.match(assessments, /placement-6b/);
   assert.match(schema, /export const learningProgress/);
   assert.match(schema, /export const artworks/);
   assert.match(schema, /export const contentItems/);
