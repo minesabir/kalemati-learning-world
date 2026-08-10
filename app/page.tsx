@@ -1,11 +1,27 @@
 "use client";
 
+import Image from "next/image";
 import {
+  useEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type DragEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import {
+  coloringScenes,
+  gameRounds,
+  letters,
+  levels,
+  sentenceExercises,
+  stories,
+  wordChallenges,
+  words,
+  type SentenceExercise,
+  type Story,
+} from "./curriculum";
 
 type ViewId =
   | "home"
@@ -19,111 +35,428 @@ type ViewId =
   | "games"
   | "teacher";
 
-const navGroups: { label: string; items: { id: ViewId; icon: string; label: string }[] }[] = [
+type ResultState = "idle" | "right" | "try";
+type SyncState = "loading" | "saved" | "saving" | "preview" | "error";
+type Point = { x: number; y: number };
+type PaintStroke = {
+  color: string;
+  size: number;
+  erase: boolean;
+  points: Point[];
+};
+type ProgressItem = {
+  id?: number;
+  track: string;
+  itemId: string;
+  status: string;
+  score: number;
+  attempts?: number;
+};
+type Learner = {
+  id?: number;
+  name: string;
+  ageBand: string;
+  currentLevel: number;
+  xp: number;
+  streak: number;
+};
+type CustomContent = {
+  id: number;
+  type: string;
+  title: string;
+  arabic: string;
+  english: string;
+  level: number;
+};
+type Booking = {
+  id?: number;
+  teacherName: string;
+  lessonSlot: string;
+  focus: string;
+  status: string;
+};
+
+const navGroups: {
+  label: string;
+  items: { id: ViewId; icon: string; label: string }[];
+}[] = [
   {
-    label: "Explore",
+    label: "Learn",
     items: [
       { id: "home", icon: "⌂", label: "My World" },
       { id: "letters", icon: "أ", label: "Letter Garden" },
       { id: "words", icon: "✦", label: "Word Workshop" },
       { id: "sentences", icon: "≋", label: "Sentence Studio" },
-      { id: "stories", icon: "◐", label: "Story Cove" },
+      { id: "stories", icon: "◐", label: "Story Library" },
     ],
   },
   {
-    label: "Create & Play",
+    label: "Create & Practise",
     items: [
       { id: "homework", icon: "✓", label: "Homework Nest" },
       { id: "copybook", icon: "✎", label: "Copybook" },
-      { id: "coloring", icon: "✿", label: "Color & Learn" },
+      { id: "coloring", icon: "✿", label: "Color Studio" },
       { id: "games", icon: "◆", label: "Game Meadow" },
       { id: "teacher", icon: "☏", label: "Meet a Teacher" },
     ],
   },
 ];
 
-const letterData = [
-  ["ا", "أَسَد", "Lion", "🦁"], ["ب", "بَطَّة", "Duck", "🦆"],
-  ["ت", "تُفَّاحَة", "Apple", "🍎"], ["ث", "ثَعْلَب", "Fox", "🦊"],
-  ["ج", "جَمَل", "Camel", "🐪"], ["ح", "حُوت", "Whale", "🐋"],
-  ["خ", "خُبْز", "Bread", "🥖"], ["د", "دُبّ", "Bear", "🐻"],
-  ["ذ", "ذُرَة", "Corn", "🌽"], ["ر", "رُمَّان", "Pomegranate", "🍎"],
-  ["ز", "زَهْرَة", "Flower", "🌸"], ["س", "سَمَكَة", "Fish", "🐟"],
-  ["ش", "شَمْس", "Sun", "☀️"], ["ص", "صَقْر", "Falcon", "🦅"],
-  ["ض", "ضِفْدَع", "Frog", "🐸"], ["ط", "طَائِرَة", "Plane", "✈️"],
-  ["ظ", "ظَرْف", "Envelope", "✉️"], ["ع", "عَيْن", "Eye", "👁️"],
-  ["غ", "غَيْمَة", "Cloud", "☁️"], ["ف", "فَرَاشَة", "Butterfly", "🦋"],
-  ["ق", "قَمَر", "Moon", "🌙"], ["ك", "كِتَاب", "Book", "📘"],
-  ["ل", "لَيْمُون", "Lemon", "🍋"], ["م", "مَوْز", "Banana", "🍌"],
-  ["ن", "نَحْلَة", "Bee", "🐝"], ["ه", "هَدِيَّة", "Gift", "🎁"],
-  ["و", "وَرْدَة", "Rose", "🌹"], ["ي", "يَد", "Hand", "✋"],
-] as const;
-
-const wordCards = [
-  { arabic: "قَمَر", english: "Moon", icon: "🌙", color: "lavender" },
-  { arabic: "كِتَاب", english: "Book", icon: "📘", color: "mint" },
-  { arabic: "تُفَّاحَة", english: "Apple", icon: "🍎", color: "coral" },
-  { arabic: "بَيْت", english: "Home", icon: "🏠", color: "sun" },
-  { arabic: "سَمَكَة", english: "Fish", icon: "🐟", color: "sky" },
-  { arabic: "زَهْرَة", english: "Flower", icon: "🌸", color: "rose" },
+const palette = [
+  "#ef8f79",
+  "#f2c968",
+  "#80b49b",
+  "#7fc4cc",
+  "#b7a7d8",
+  "#e89eb6",
+  "#315b54",
+  "#f7f0df",
 ];
 
-const stories = [
-  {
-    title: "The Little Moon",
-    arabicTitle: "الْقَمَرُ الصَّغِيرُ",
-    level: "6 min · Beginner",
-    icon: "🌙",
-    text: "فِي اللَّيْلِ، نَظَرَ سَامِي إِلَى السَّمَاءِ. رَأَى قَمَرًا صَغِيرًا يَضْحَكُ بَيْنَ النُّجُومِ. قَالَ سَامِي: مَرْحَبًا يَا قَمَر!",
-    words: ["اللَّيْل — night", "السَّمَاء — sky", "يَضْحَك — smiles"],
-  },
-  {
-    title: "Mira's Red Kite",
-    arabicTitle: "طَائِرَةُ مِيرَا الْحَمْرَاءُ",
-    level: "5 min · Beginner",
-    icon: "🪁",
-    text: "مِيرَا فِي الْحَدِيقَةِ. مَعَهَا طَائِرَةٌ حَمْرَاءُ. تَطِيرُ الطَّائِرَةُ عَالِيًا، وَمِيرَا تَضْحَكُ فَرِحَةً.",
-    words: ["الْحَدِيقَة — garden", "حَمْرَاء — red", "عَالِيًا — high"],
-  },
-  {
-    title: "The Garden of Words",
-    arabicTitle: "حَدِيقَةُ الْكَلِمَاتِ",
-    level: "7 min · Growing",
-    icon: "🌱",
-    text: "زَرَعَتْ لَيْلَى ثَلَاثَ بُذُورٍ فِي الْحَدِيقَةِ. كَتَبَتْ عَلَيْهَا: حُبّ، فَرَح، وَسَلَام. كَبُرَتِ الْكَلِمَاتُ وَصَارَتْ أَزْهَارًا جَمِيلَةً.",
-    words: ["بُذُور — seeds", "فَرَح — joy", "سَلَام — peace"],
-  },
+const copyTargets = [
+  { value: "ح", label: "Letter Haa", guide: "حـ · ـحـ · ـح" },
+  { value: "ع", label: "Letter Ain", guide: "عـ · ـعـ · ـع" },
+  { value: "م", label: "Letter Meem", guide: "مـ · ـمـ · ـم" },
+  { value: "ك", label: "Letter Kaaf", guide: "كـ · ـكـ · ـك" },
+  { value: "قَمَر", label: "Moon", guide: "قَـمَـر" },
+  { value: "كِتَاب", label: "Book", guide: "كِـتَـاب" },
+  { value: "حَدِيقَة", label: "Garden", guide: "حَـدِيـقَـة" },
+  { value: "أَنَا أَقْرَأُ", label: "I read", guide: "أَنَا أَقْرَأُ" },
 ];
 
-const homeworkTasks = [
-  ["Listen & repeat", "Say the letter ح and its word three times", "4 min", "🎧"],
-  ["Copybook practice", "Trace ح on one practice page", "6 min", "✎"],
-  ["Tiny story", "Listen to The Little Moon", "6 min", "🌙"],
-  ["Family challenge", "Find two things at home that start with ب", "5 min", "🏠"],
-];
+function canvasPoint(
+  event: ReactPointerEvent<HTMLCanvasElement>,
+  canvas: HTMLCanvasElement,
+) {
+  const bounds = canvas.getBoundingClientRect();
+  return {
+    x: ((event.clientX - bounds.left) / bounds.width) * canvas.width,
+    y: ((event.clientY - bounds.top) / bounds.height) * canvas.height,
+  };
+}
 
-const palette = ["#ef8f79", "#f2c968", "#80b49b", "#7fc4cc", "#b7a7d8", "#e89eb6"];
+function drawColorTemplate(
+  context: CanvasRenderingContext2D,
+  sceneId: string,
+  width: number,
+  height: number,
+) {
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = "#fffdf7";
+  context.fillRect(0, 0, width, height);
+  context.strokeStyle = "#315b54";
+  context.fillStyle = "#fffdf7";
+  context.lineWidth = 7;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+
+  const line = (points: Point[], close = false) => {
+    context.beginPath();
+    points.forEach((point, index) =>
+      index === 0
+        ? context.moveTo(point.x, point.y)
+        : context.lineTo(point.x, point.y),
+    );
+    if (close) context.closePath();
+    context.stroke();
+  };
+  const circle = (x: number, y: number, radius: number) => {
+    context.beginPath();
+    context.arc(x, y, radius, 0, Math.PI * 2);
+    context.fill();
+    context.stroke();
+  };
+  const rect = (x: number, y: number, w: number, h: number, radius = 18) => {
+    context.beginPath();
+    context.roundRect(x, y, w, h, radius);
+    context.fill();
+    context.stroke();
+  };
+
+  context.save();
+  if (sceneId === "garden") {
+    line([{ x: 70, y: 520 }, { x: 930, y: 520 }]);
+    circle(805, 105, 48);
+    for (let i = 0; i < 6; i += 1) {
+      const angle = (Math.PI * 2 * i) / 6;
+      circle(470 + Math.cos(angle) * 95, 260 + Math.sin(angle) * 95, 55);
+    }
+    circle(470, 260, 61);
+    line([{ x: 470, y: 321 }, { x: 470, y: 520 }]);
+    context.beginPath();
+    context.ellipse(410, 420, 70, 34, -0.45, 0, Math.PI * 2);
+    context.fill(); context.stroke();
+    context.beginPath();
+    context.ellipse(530, 450, 70, 34, 0.45, 0, Math.PI * 2);
+    context.fill(); context.stroke();
+  } else if (sceneId === "night") {
+    context.beginPath();
+    context.arc(485, 260, 145, 0.35, Math.PI * 1.75);
+    context.arc(555, 225, 125, Math.PI * 1.65, 0.47, true);
+    context.closePath(); context.fill(); context.stroke();
+    [[180, 140], [755, 125], [800, 340], [250, 410]].forEach(([x, y]) => {
+      line([{ x, y: y - 34 }, { x: x + 12, y: y - 10 }, { x: x + 39, y }, { x: x + 12, y: y + 10 }, { x, y: y + 38 }, { x: x - 12, y: y + 10 }, { x: x - 39, y }, { x: x - 12, y: y - 10 }], true);
+    });
+    line([{ x: 610, y: 500 }, { x: 725, y: 370 }, { x: 770, y: 400 }, { x: 675, y: 515 }], true);
+    line([{ x: 650, y: 510 }, { x: 610, y: 585 }]);
+    line([{ x: 683, y: 508 }, { x: 725, y: 585 }]);
+  } else if (sceneId === "home") {
+    rect(310, 255, 390, 285, 8);
+    line([{ x: 250, y: 270 }, { x: 505, y: 90 }, { x: 760, y: 270 }]);
+    rect(455, 385, 105, 155, 40);
+    rect(355, 330, 85, 78, 10); rect(575, 330, 85, 78, 10);
+    line([{ x: 398, y: 330 }, { x: 398, y: 408 }]);
+    line([{ x: 618, y: 330 }, { x: 618, y: 408 }]);
+    circle(150, 360, 75); line([{ x: 150, y: 435 }, { x: 150, y: 550 }]);
+    line([{ x: 70, y: 550 }, { x: 900, y: 550 }]);
+  } else if (sceneId === "sea") {
+    for (let row = 0; row < 4; row += 1) {
+      context.beginPath();
+      for (let x = 30; x <= 970; x += 20) {
+        const y = 390 + row * 60 + Math.sin(x / 45) * 16;
+        if (x === 30) context.moveTo(x, y);
+        else context.lineTo(x, y);
+      }
+      context.stroke();
+    }
+    line([{ x: 365, y: 355 }, { x: 655, y: 355 }, { x: 595, y: 440 }, { x: 425, y: 440 }], true);
+    line([{ x: 510, y: 110 }, { x: 510, y: 355 }]);
+    line([{ x: 510, y: 125 }, { x: 315, y: 330 }, { x: 510, y: 330 }], true);
+    line([{ x: 525, y: 150 }, { x: 705, y: 330 }, { x: 525, y: 330 }], true);
+    circle(825, 105, 45);
+  } else if (sceneId === "market") {
+    line([{ x: 255, y: 245 }, { x: 735, y: 245 }, { x: 675, y: 545 }, { x: 315, y: 545 }], true);
+    for (let x = 340; x <= 650; x += 100) circle(x, 320 + (x % 200), 49);
+    circle(455, 350, 52); circle(560, 440, 50); circle(400, 455, 46);
+    line([{ x: 320, y: 245 }, { x: 365, y: 120 }, { x: 630, y: 120 }, { x: 685, y: 245 }]);
+    line([{ x: 385, y: 170 }, { x: 615, y: 170 }]);
+    line([{ x: 105, y: 560 }, { x: 890, y: 560 }]);
+  } else if (sceneId === "kite") {
+    line([{ x: 500, y: 105 }, { x: 665, y: 265 }, { x: 500, y: 430 }, { x: 335, y: 265 }], true);
+    line([{ x: 500, y: 105 }, { x: 500, y: 430 }]);
+    line([{ x: 335, y: 265 }, { x: 665, y: 265 }]);
+    context.beginPath();
+    context.moveTo(500, 430);
+    context.bezierCurveTo(390, 470, 620, 530, 450, 610);
+    context.stroke();
+    [[480, 470], [510, 525], [472, 570]].forEach(([x, y]) => line([{ x: x - 25, y: y - 12 }, { x, y }, { x: x - 25, y: y + 12 }, { x: x + 25, y }, { x: x + 25, y: y - 12 }, { x, y }], true));
+    context.beginPath(); context.arc(175, 160, 55, Math.PI, 0); context.arc(240, 160, 70, Math.PI, 0); context.arc(315, 160, 52, Math.PI, 0); context.stroke();
+  } else if (sceneId === "classroom") {
+    line([{ x: 120, y: 510 }, { x: 880, y: 510 }]);
+    line([{ x: 205, y: 165 }, { x: 465, y: 210 }, { x: 500, y: 500 }, { x: 220, y: 450 }], true);
+    line([{ x: 795, y: 165 }, { x: 535, y: 210 }, { x: 500, y: 500 }, { x: 780, y: 450 }], true);
+    line([{ x: 500, y: 210 }, { x: 500, y: 500 }]);
+    rect(90, 80, 125, 90, 16); rect(750, 75, 130, 100, 16);
+    circle(152, 125, 25);
+    line([{ x: 775, y: 150 }, { x: 840, y: 95 }]);
+  } else {
+    line([{ x: 430, y: 470 }, { x: 500, y: 110 }, { x: 570, y: 470 }], true);
+    line([{ x: 455, y: 360 }, { x: 350, y: 430 }, { x: 430, y: 470 }], true);
+    line([{ x: 545, y: 360 }, { x: 650, y: 430 }, { x: 570, y: 470 }], true);
+    circle(500, 235, 42);
+    line([{ x: 450, y: 470 }, { x: 405, y: 550 }, { x: 470, y: 520 }], true);
+    line([{ x: 550, y: 470 }, { x: 595, y: 550 }, { x: 530, y: 520 }], true);
+    circle(780, 190, 82); circle(220, 215, 52);
+    context.beginPath(); context.ellipse(780, 190, 132, 32, -0.3, 0, Math.PI * 2); context.stroke();
+    [[760, 450], [225, 465], [145, 95]].forEach(([x, y]) => line([{ x, y: y - 28 }, { x: x + 12, y }, { x, y: y + 28 }, { x: x - 12, y }], true));
+  }
+  context.restore();
+}
+
+function drawPaintStrokes(
+  context: CanvasRenderingContext2D,
+  strokes: PaintStroke[],
+) {
+  strokes.forEach((stroke) => {
+    if (!stroke.points.length) return;
+    context.save();
+    context.globalCompositeOperation = stroke.erase
+      ? "destination-out"
+      : "source-over";
+    context.strokeStyle = stroke.color;
+    context.lineWidth = stroke.size;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.beginPath();
+    context.moveTo(stroke.points[0].x, stroke.points[0].y);
+    stroke.points.slice(1).forEach((point) => context.lineTo(point.x, point.y));
+    if (stroke.points.length === 1) {
+      context.lineTo(stroke.points[0].x + 0.1, stroke.points[0].y + 0.1);
+    }
+    context.stroke();
+    context.restore();
+  });
+}
 
 export default function Home() {
   const [view, setView] = useState<ViewId>("home");
   const [soundOn, setSoundOn] = useState(true);
+  const [activeLevel, setActiveLevel] = useState(1);
   const [activeLetter, setActiveLetter] = useState(5);
-  const [activeWord, setActiveWord] = useState(0);
-  const [builtWord, setBuiltWord] = useState("");
+  const [activeWordId, setActiveWordId] = useState("moon");
+  const [wordCategory, setWordCategory] = useState("All");
+  const [builtLetters, setBuiltLetters] = useState<string[]>([]);
+  const [wordResult, setWordResult] = useState<ResultState>("idle");
+  const [sentenceIndex, setSentenceIndex] = useState(0);
   const [sentenceWords, setSentenceWords] = useState<string[]>([]);
-  const [sentenceResult, setSentenceResult] = useState<"idle" | "right" | "try">("idle");
+  const [sentenceResult, setSentenceResult] = useState<ResultState>("idle");
+  const [showHint, setShowHint] = useState(false);
   const [storyIndex, setStoryIndex] = useState(0);
-  const [completedTasks, setCompletedTasks] = useState<Record<number, boolean>>({ 0: true });
-  const [color, setColor] = useState(palette[0]);
-  const [petals, setPetals] = useState(["#fffaf0", "#fffaf0", "#fffaf0", "#fffaf0", "#fffaf0", "#fffaf0"]);
-  const [gameResult, setGameResult] = useState<"idle" | "right" | "try">("idle");
+  const [storyAnswer, setStoryAnswer] = useState("");
+  const [copyTargetIndex, setCopyTargetIndex] = useState(0);
+  const [selectedSceneId, setSelectedSceneId] = useState("garden");
+  const [coloringBook, setColoringBook] = useState<Record<string, PaintStroke[]>>({});
+  const [brushColor, setBrushColor] = useState(palette[0]);
+  const [brushSize, setBrushSize] = useState(24);
+  const [eraserOn, setEraserOn] = useState(false);
+  const [artMessage, setArtMessage] = useState("");
+  const [gameIndex, setGameIndex] = useState(0);
+  const [gameResult, setGameResult] = useState<ResultState>("idle");
   const [teacherSlot, setTeacherSlot] = useState("");
+  const [lessonFocus, setLessonFocus] = useState("Conversation confidence");
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
   const [showParent, setShowParent] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [parentTab, setParentTab] = useState<"progress" | "content" | "account">("progress");
+  const [authenticated, setAuthenticated] = useState(false);
+  const [syncState, setSyncState] = useState<SyncState>("loading");
+  const [owner, setOwner] = useState({ displayName: "Parent", email: "" });
+  const [learner, setLearner] = useState<Learner>({ name: "Layla", ageBand: "6–8", currentLevel: 1, xp: 80, streak: 7 });
+  const [progress, setProgress] = useState<ProgressItem[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [customContent, setCustomContent] = useState<CustomContent[]>([]);
+  const [contentForm, setContentForm] = useState({ type: "story", title: "", arabic: "", english: "", level: 1 });
+  const [learnerNameDraft, setLearnerNameDraft] = useState("Layla");
+
   const mainRef = useRef<HTMLElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const drawing = useRef(false);
+  const traceCanvasRef = useRef<HTMLCanvasElement>(null);
+  const tracing = useRef(false);
+  const colorCanvasRef = useRef<HTMLCanvasElement>(null);
+  const painting = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/learning")
+      .then((response) => response.json())
+      .then((data) => {
+        if (cancelled || !data.authenticated) {
+          if (!cancelled) setSyncState("preview");
+          return;
+        }
+        setAuthenticated(true);
+        setOwner(data.owner);
+        setLearner(data.learner);
+        setLearnerNameDraft(data.learner.name);
+        setActiveLevel(data.learner.currentLevel);
+        setProgress(data.progress ?? []);
+        setBookings(data.bookings ?? []);
+        setCustomContent(data.customContent ?? []);
+        const restored: Record<string, PaintStroke[]> = {};
+        (data.artworks ?? []).forEach(
+          (artwork: { sceneId: string; strokesJson: string }) => {
+            try {
+              restored[artwork.sceneId] = JSON.parse(artwork.strokesJson);
+            } catch {
+              restored[artwork.sceneId] = [];
+            }
+          },
+        );
+        setColoringBook(restored);
+        setSyncState("saved");
+      })
+      .catch(() => setSyncState("preview"));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const canvas = colorCanvasRef.current;
+    if (!canvas) return;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    drawColorTemplate(context, selectedSceneId, canvas.width, canvas.height);
+    const paintLayer = document.createElement("canvas");
+    paintLayer.width = canvas.width;
+    paintLayer.height = canvas.height;
+    const paintContext = paintLayer.getContext("2d");
+    if (!paintContext) return;
+    drawPaintStrokes(paintContext, coloringBook[selectedSceneId] ?? []);
+    context.drawImage(paintLayer, 0, 0);
+  }, [selectedSceneId, coloringBook]);
+
+  const activeLevelInfo = levels[activeLevel - 1];
+  const completedIds = useMemo(
+    () => new Set(progress.filter((item) => item.status === "completed").map((item) => item.itemId)),
+    [progress],
+  );
+  const currentLevelFloor = activeLevelInfo.xpFloor;
+  const nextLevelFloor = levels[activeLevel]?.xpFloor ?? currentLevelFloor + 700;
+  const levelPercent = Math.max(
+    0,
+    Math.min(100, ((learner.xp - currentLevelFloor) / (nextLevelFloor - currentLevelFloor)) * 100),
+  );
+
+  const postAction = async (payload: Record<string, unknown>) => {
+    if (!authenticated) {
+      setSyncState("preview");
+      return null;
+    }
+    setSyncState("saving");
+    try {
+      const response = await fetch("/api/learning", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Could not save");
+      setSyncState("saved");
+      return data;
+    } catch {
+      setSyncState("error");
+      return null;
+    }
+  };
+
+  const recordProgress = async (
+    itemId: string,
+    track: string,
+    score = 100,
+  ) => {
+    setProgress((items) => {
+      const existing = items.find((item) => item.itemId === itemId);
+      if (existing) {
+        return items.map((item) =>
+          item.itemId === itemId
+            ? { ...item, status: "completed", score: Math.max(item.score, score) }
+            : item,
+        );
+      }
+      return [...items, { itemId, track, score, status: "completed" }];
+    });
+    if (!authenticated) {
+      setLearner((item) => ({ ...item, xp: item.xp + Math.max(5, Math.round(score / 5)) }));
+    }
+    const data = await postAction({ action: "progress", itemId, track, status: "completed", score });
+    if (data?.learner) setLearner(data.learner);
+  };
+
+  const selectLevel = async (level: number) => {
+    setActiveLevel(level);
+    setSentenceIndex(0);
+    setSentenceWords([]);
+    setSentenceResult("idle");
+    setStoryIndex(0);
+    setStoryAnswer("");
+    setGameIndex(0);
+    setGameResult("idle");
+    setBuiltLetters([]);
+    setWordResult("idle");
+    setLearner((item) => ({ ...item, currentLevel: level }));
+    const data = await postAction({ action: "profile", name: learner.name, currentLevel: level });
+    if (data?.learner) setLearner(data.learner);
+  };
 
   const goTo = (next: ViewId) => {
     setView(next);
@@ -135,246 +468,551 @@ export default function Home() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "ar-SA";
-    utterance.rate = 0.72;
+    utterance.rate = activeLevel >= 4 ? 0.82 : 0.7;
     window.speechSynthesis.speak(utterance);
   };
 
-  const drawPoint = (event: ReactPointerEvent<HTMLCanvasElement>, start: boolean) => {
+  const beginTrace = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
-    const bounds = canvas.getBoundingClientRect();
-    const x = ((event.clientX - bounds.left) / bounds.width) * canvas.width;
-    const y = ((event.clientY - bounds.top) / bounds.height) * canvas.height;
     const context = canvas.getContext("2d");
     if (!context) return;
+    const point = canvasPoint(event, canvas);
+    tracing.current = true;
+    canvas.setPointerCapture(event.pointerId);
     context.strokeStyle = "#315b54";
     context.lineWidth = 13;
     context.lineCap = "round";
     context.lineJoin = "round";
-    if (start) {
-      drawing.current = true;
-      canvas.setPointerCapture(event.pointerId);
-      context.beginPath();
-      context.moveTo(x, y);
-    } else if (drawing.current) {
-      context.lineTo(x, y);
-      context.stroke();
-    }
+    context.beginPath();
+    context.moveTo(point.x, point.y);
   };
 
-  const stopDrawing = () => {
-    drawing.current = false;
+  const moveTrace = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!tracing.current) return;
+    const canvas = event.currentTarget;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    const point = canvasPoint(event, canvas);
+    context.lineTo(point.x, point.y);
+    context.stroke();
   };
 
-  const clearCanvas = () => {
-    const canvas = canvasRef.current;
+  const clearTrace = () => {
+    const canvas = traceCanvasRef.current;
     canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
   };
 
-  const pageHeader = (eyebrow: string, title: string, description: string, arabic?: string) => (
-    <header className="page-heading">
+  const beginPaint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const canvas = event.currentTarget;
+    const point = canvasPoint(event, canvas);
+    painting.current = true;
+    canvas.setPointerCapture(event.pointerId);
+    const stroke: PaintStroke = {
+      color: brushColor,
+      size: brushSize,
+      erase: eraserOn,
+      points: [point],
+    };
+    setColoringBook((book) => ({
+      ...book,
+      [selectedSceneId]: [...(book[selectedSceneId] ?? []), stroke],
+    }));
+    setArtMessage("");
+  };
+
+  const movePaint = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (!painting.current) return;
+    const canvas = event.currentTarget;
+    const point = canvasPoint(event, canvas);
+    setColoringBook((book) => {
+      const strokes = [...(book[selectedSceneId] ?? [])];
+      const last = strokes[strokes.length - 1];
+      if (!last) return book;
+      strokes[strokes.length - 1] = { ...last, points: [...last.points, point] };
+      return { ...book, [selectedSceneId]: strokes };
+    });
+  };
+
+  const undoPaint = () => {
+    setColoringBook((book) => ({
+      ...book,
+      [selectedSceneId]: (book[selectedSceneId] ?? []).slice(0, -1),
+    }));
+  };
+
+  const saveArtwork = async () => {
+    const scene = coloringScenes.find((item) => item.id === selectedSceneId)!;
+    const strokesJson = JSON.stringify(coloringBook[selectedSceneId] ?? []);
+    const data = await postAction({ action: "artwork", sceneId: scene.id, title: scene.title, strokesJson });
+    setArtMessage(data ? "Saved to the learner gallery ✓" : authenticated ? "Save failed — try again" : "Saved for this preview session");
+    await recordProgress(`art-${scene.id}`, "coloring", 100);
+  };
+
+  const downloadArtwork = () => {
+    const canvas = colorCanvasRef.current;
+    if (!canvas) return;
+    const link = document.createElement("a");
+    link.download = `kalemati-${selectedSceneId}.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  const customSentences = customContent
+    .filter((item) => item.type === "sentence" && item.level === activeLevel)
+    .map<SentenceExercise>((item) => ({
+      id: `custom-sentence-${item.id}`,
+      level: item.level,
+      prompt: item.english || item.title,
+      correct: item.arabic.split(/\s+/),
+      bank: item.arabic.split(/\s+/).reverse(),
+      hint: "Use the meaning and Arabic reading direction to rebuild the sentence.",
+      explanation: "This sentence was added from the Content Studio.",
+      spoken: item.arabic,
+    }));
+  const levelSentences = [
+    ...sentenceExercises.filter((item) => item.level === activeLevel),
+    ...customSentences,
+  ];
+  const sentence = levelSentences[sentenceIndex % levelSentences.length];
+
+  const addSentenceWord = (word: string) => {
+    const available = sentence.bank.filter((item) => item === word).length;
+    const used = sentenceWords.filter((item) => item === word).length;
+    if (used >= available) return;
+    setSentenceWords((items) => [...items, word]);
+    setSentenceResult("idle");
+  };
+
+  const checkSentence = async () => {
+    const right = sentenceWords.join(" ") === sentence.correct.join(" ");
+    setSentenceResult(right ? "right" : "try");
+    if (right) {
+      speak(sentence.spoken);
+      await recordProgress(sentence.id, "sentences", 100);
+    }
+  };
+
+  const nextSentence = () => {
+    setSentenceIndex((index) => (index + 1) % levelSentences.length);
+    setSentenceWords([]);
+    setSentenceResult("idle");
+    setShowHint(false);
+  };
+
+  const customStories = customContent
+    .filter((item) => item.type === "story" && item.level === activeLevel)
+    .map<Story>((item) => ({
+      id: `custom-story-${item.id}`,
+      level: item.level,
+      title: item.title,
+      arabicTitle: item.title,
+      minutes: 6,
+      icon: "✦",
+      text: item.arabic,
+      words: item.english ? [item.english] : [],
+      question: "Did you understand the main idea?",
+      options: ["Yes", "I will listen again"],
+      answer: "Yes",
+    }));
+  const levelStories = [
+    ...stories.filter((item) => item.level === activeLevel),
+    ...customStories,
+  ];
+  const story = levelStories[storyIndex % levelStories.length];
+
+  const levelGames = gameRounds.filter((item) => item.level === activeLevel);
+  const game = levelGames[gameIndex % levelGames.length];
+
+  const visibleWords = words.filter(
+    (item) =>
+      item.level <= activeLevel &&
+      (wordCategory === "All" || item.category === wordCategory),
+  );
+  const wordCategories = [
+    "All",
+    ...Array.from(new Set(words.filter((item) => item.level <= activeLevel).map((item) => item.category))),
+  ];
+  const activeWord =
+    visibleWords.find((item) => item.id === activeWordId) ?? visibleWords[0];
+  const wordChallenge = wordChallenges[activeLevel - 1];
+  const builtWord = builtLetters.join("");
+
+  const weeklyTasks = [
+    { id: `hw-${activeLevel}-listen`, icon: "🎧", title: "Listen & echo", detail: `Repeat five phrases from ${activeLevelInfo.name}`, minutes: 5, view: activeLevel < 3 ? "letters" : "sentences" as ViewId },
+    { id: `hw-${activeLevel}-copy`, icon: "✎", title: "Copybook practice", detail: "Complete one guided line and one free line", minutes: 7, view: "copybook" as ViewId },
+    { id: `hw-${activeLevel}-story`, icon: "◐", title: "Story visit", detail: `Listen to a level ${activeLevel} story and answer its question`, minutes: 8, view: "stories" as ViewId },
+    { id: `hw-${activeLevel}-sentence`, icon: "≋", title: "Sentence builder", detail: "Build two sentences without a hint", minutes: 6, view: "sentences" as ViewId },
+    { id: `hw-${activeLevel}-family`, icon: "⌂", title: "Family challenge", detail: "Use three Arabic words during an everyday moment", minutes: 5, view: "words" as ViewId },
+  ];
+  const completedHomework = weeklyTasks.filter((task) => completedIds.has(task.id)).length;
+
+  const trackScore = (track: string) => {
+    const items = progress.filter((item) => item.track === track);
+    if (!items.length) return 0;
+    return Math.round(items.reduce((total, item) => total + item.score, 0) / items.length);
+  };
+
+  const updateProfile = async () => {
+    const nextName = learnerNameDraft.trim() || learner.name;
+    setLearner((item) => ({ ...item, name: nextName }));
+    const data = await postAction({ action: "profile", name: nextName, currentLevel: activeLevel });
+    if (data?.learner) setLearner(data.learner);
+  };
+
+  const addCustomContent = async () => {
+    if (!contentForm.title.trim() || !contentForm.arabic.trim()) return;
+    const data = await postAction({ action: "content", ...contentForm });
+    const fallback: CustomContent = {
+      id: Date.now(),
+      ...contentForm,
+    };
+    setCustomContent((items) => [...items, data?.item ?? fallback]);
+    setContentForm((item) => ({ ...item, title: "", arabic: "", english: "" }));
+  };
+
+  const pageHeader = (
+    eyebrow: string,
+    title: string,
+    description: string,
+    arabic?: string,
+  ) => (
+    <header className="page-heading expanded-heading">
       <div>
         <p className="eyebrow">{eyebrow}</p>
         <h1>{title}</h1>
         <p>{description}</p>
+        <div className="level-context">
+          <span className={`level-dot ${activeLevelInfo.color}`} />
+          Level {activeLevel} · {activeLevelInfo.name} · {activeLevelInfo.cefr}
+        </div>
       </div>
-      {arabic && <div className="heading-token arabic" dir="rtl">{arabic}</div>}
+      {arabic && (
+        <div className="heading-token arabic" dir="rtl">
+          {arabic}
+        </div>
+      )}
     </header>
   );
 
   const renderHome = () => (
-    <div className="dashboard-grid">
+    <div className="dashboard-grid expanded-dashboard">
       <div className="main-stack">
-        <section className="hero-card">
-          <img src="/kalemati-world.png" alt="Children open a sculptural portal into worlds made from Arabic words" />
+        <section className="hero-card expanded-hero">
+          <Image
+            src="/kalemati-world.png"
+            alt="Children open a sculptural portal into worlds made from Arabic words"
+            fill
+            priority
+            sizes="(max-width: 720px) 100vw, (max-width: 1240px) 85vw, 70vw"
+          />
           <div className="hero-wash" />
           <div className="hero-copy">
-            <span className="soft-pill">Today · 12 minute adventure</span>
-            <p className="arabic hello" dir="rtl">مَرْحَبًا يَا لَيْلَى!</p>
-            <h1>Your Arabic world is growing.</h1>
-            <p>Your next word portal is waiting in the Letter Garden.</p>
+            <span className="soft-pill">
+              Level {activeLevel} · {activeLevelInfo.cefr} · adaptive journey
+            </span>
+            <p className="arabic hello" dir="rtl">
+              مَرْحَبًا يَا {learner.name}!
+            </p>
+            <h1>Every word opens a new world.</h1>
+            <p>{activeLevelInfo.promise}</p>
             <div className="hero-actions">
-              <button className="primary-button" onClick={() => goTo("letters")}>Continue the journey <span>→</span></button>
-              <button className="round-button" onClick={() => speak("مَرْحَبًا يَا لَيْلَى") } aria-label="Hear the Arabic greeting">♪</button>
+              <button
+                className="primary-button"
+                onClick={() =>
+                  goTo(activeLevel <= 1 ? "letters" : activeLevel <= 2 ? "words" : "sentences")
+                }
+              >
+                Continue my path <span>→</span>
+              </button>
+              <button
+                className="round-button"
+                onClick={() => speak(`مَرْحَبًا يَا ${learner.name}`)}
+                aria-label="Hear the greeting"
+              >
+                ♪
+              </button>
             </div>
           </div>
-          <div className="hero-progress" aria-label="Weekly goal 72 percent complete">
-            <div><span>Weekly journey</span><strong>72%</strong></div>
-            <div className="progress-track"><span style={{ width: "72%" }} /></div>
+          <div className="hero-progress">
+            <div>
+              <span>{activeLevelInfo.name} journey</span>
+              <strong>{Math.round(levelPercent)}%</strong>
+            </div>
+            <div className="progress-track">
+              <span style={{ width: `${levelPercent}%` }} />
+            </div>
           </div>
         </section>
 
-        <section className="section-block">
+        <section className="panel curriculum-map">
           <div className="section-title-row">
-            <div><p className="eyebrow">Your learning path</p><h2>Follow the curiosity trail</h2></div>
-            <button className="text-button" onClick={() => goTo("homework")}>View this week <span>→</span></button>
+            <div>
+              <p className="eyebrow">Complete Arabic pathway</p>
+              <h2>Six worlds, one connected curriculum</h2>
+            </div>
+            <span className="curriculum-count">120+ guided activities</span>
           </div>
-          <div className="journey-path">
-            <button className="journey-stop complete" onClick={() => goTo("letters")}>
-              <span className="stop-number">✓</span><span className="stop-art arabic">ح</span><span><strong>Letter sound</strong><small>Completed</small></span>
-            </button>
-            <span className="trail dotted" />
-            <button className="journey-stop current" onClick={() => goTo("words")}>
-              <span className="stop-number">2</span><span className="stop-art">🐋</span><span><strong>Build a word</strong><small>Up next · 5 min</small></span>
-            </button>
-            <span className="trail" />
-            <button className="journey-stop" onClick={() => goTo("sentences")}>
-              <span className="stop-number">3</span><span className="stop-art">💬</span><span><strong>Make a sentence</strong><small>Locked for now</small></span>
-            </button>
+          <div className="level-roadmap">
+            {levels.map((level) => (
+              <button
+                key={level.id}
+                className={`level-card ${level.color} ${activeLevel === level.id ? "active" : ""}`}
+                onClick={() => selectLevel(level.id)}
+              >
+                <span className="level-number">{level.id}</span>
+                <small>{level.cefr}</small>
+                <strong>{level.name}</strong>
+                <span className="arabic" dir="rtl">{level.arabic}</span>
+                <em>{level.focus[0]} · {level.focus[1]}</em>
+                {learner.xp >= level.xpFloor ? <i>Open</i> : <i>Preview</i>}
+              </button>
+            ))}
           </div>
         </section>
 
-        <section className="split-cards">
+        <section className="skill-grid">
+          {[
+            ["letters", "Letter confidence", trackScore("letters"), "أ", "letters"],
+            ["words", "Growing vocabulary", trackScore("words"), "ك", "words"],
+            ["sentences", "Sentence building", trackScore("sentences"), "≋", "sentences"],
+            ["stories", "Reading & listening", trackScore("stories"), "◐", "stories"],
+          ].map((skill) => (
+            <button
+              key={String(skill[0])}
+              className="skill-card"
+              onClick={() => goTo(skill[4] as ViewId)}
+            >
+              <span className={skill[0] === "letters" || skill[0] === "words" ? "arabic" : ""}>{skill[3]}</span>
+              <div>
+                <small>{skill[1]}</small>
+                <strong>{Number(skill[2]) || "New"}{Number(skill[2]) ? "%" : ""}</strong>
+              </div>
+              <div className="mini-meter"><i style={{ width: `${Number(skill[2]) || 8}%` }} /></div>
+            </button>
+          ))}
+        </section>
+
+        <section className="split-cards expanded-quick-actions">
           <button className="story-feature" onClick={() => goTo("stories")}>
             <div className="mini-scene"><span className="moon">☾</span><span className="cloud">☁</span><span className="book">▰</span></div>
-            <div><p className="eyebrow">Tonight's story</p><h3>The Little Moon</h3><p className="arabic" dir="rtl">الْقَمَرُ الصَّغِيرُ</p><span className="listen-link">Listen together · 6 min →</span></div>
+            <div>
+              <p className="eyebrow">Level {activeLevel} story shelf</p>
+              <h3>{story.title}</h3>
+              <p className="arabic" dir="rtl">{story.arabicTitle}</p>
+              <span className="listen-link">Listen, read & answer →</span>
+            </div>
           </button>
-          <div className="practice-card">
-            <div className="practice-icon">✎</div>
-            <div><p className="eyebrow">Quiet practice</p><h3>Trace today's letter</h3><p>Follow the soft path, then try it on your own.</p></div>
-            <button className="small-button" onClick={() => goTo("copybook")}>Open copybook</button>
-          </div>
+          <button className="studio-invite" onClick={() => goTo("coloring")}>
+            <div className="paint-rings"><span /><span /><span /></div>
+            <div>
+              <p className="eyebrow">Creative language</p>
+              <h3>Eight-page Color Studio</h3>
+              <p>Brushes, eraser, undo, account saving, and vocabulary audio.</p>
+              <strong>Open the studio →</strong>
+            </div>
+          </button>
         </section>
       </div>
 
       <aside className="right-rail">
         <section className="rail-card profile-card">
-          <div className="avatar-bubble">L</div>
-          <div><p className="eyebrow">Little explorer</p><h3>Layla's garden</h3></div>
-          <div className="level-line"><span>Seedling level 2</span><strong>460 / 600</strong></div>
-          <div className="progress-track mint"><span style={{ width: "77%" }} /></div>
-          <div className="tiny-stats"><div><strong>8</strong><span>letters</span></div><div><strong>14</strong><span>words</span></div><div><strong>3</strong><span>stories</span></div></div>
+          <div className="avatar-bubble">{learner.name.slice(0, 1).toUpperCase()}</div>
+          <div><p className="eyebrow">Learner profile</p><h3>{learner.name}&apos;s portal</h3></div>
+          <div className="level-line"><span>{activeLevelInfo.name}</span><strong>{learner.xp} XP</strong></div>
+          <div className="progress-track mint"><span style={{ width: `${levelPercent}%` }} /></div>
+          <div className="tiny-stats">
+            <div><strong>{progress.filter((item) => item.track === "letters").length}</strong><span>letters</span></div>
+            <div><strong>{progress.filter((item) => item.track === "sentences").length}</strong><span>sentences</span></div>
+            <div><strong>{progress.filter((item) => item.track === "stories").length}</strong><span>stories</span></div>
+          </div>
         </section>
+
         <button className="rail-card achievement-card" onClick={() => setShowAchievements(true)}>
-          <div className="achievement-top"><span className="medal">★</span><span className="new-tag">NEW</span></div>
-          <p className="eyebrow">Achievement bloomed</p><h3>Brave Storyteller</h3><p>You listened to three Arabic stories.</p><span className="text-link">See all keepsakes →</span>
+          <div className="achievement-top"><span className="medal">★</span><span className="new-tag">{progress.length ? "GROWING" : "START"}</span></div>
+          <p className="eyebrow">Achievement collection</p>
+          <h3>{progress.length >= 8 ? "Curious Pathfinder" : "First Portal Opened"}</h3>
+          <p>{progress.length} learning moments saved across the curriculum.</p>
+          <span className="text-link">See every keepsake →</span>
         </button>
+
         <section className="rail-card rhythm-card">
-          <div className="section-title-row compact"><div><p className="eyebrow">Learning rhythm</p><h3>7-day sparkle</h3></div><span className="streak">7 ✦</span></div>
-          <div className="week-dots">{["M", "T", "W", "T", "F", "S", "S"].map((day, i) => <div key={`${day}-${i}`}><span className={i < 6 ? "done" : "today"}>{i < 6 ? "✓" : "•"}</span><small>{day}</small></div>)}</div>
-          <p className="gentle-note">One tiny visit today keeps your garden glowing.</p>
+          <div className="section-title-row compact">
+            <div><p className="eyebrow">Account progress</p><h3>{syncState === "saved" ? "Safely remembered" : syncState === "saving" ? "Saving your work…" : syncState === "preview" ? "Preview session" : "Connecting…"}</h3></div>
+            <span className={`sync-orb ${syncState}`}>{syncState === "saved" ? "✓" : "•"}</span>
+          </div>
+          <div className="week-dots">
+            {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => (
+              <div key={`${day}-${index}`}><span className={index < Math.min(learner.streak, 6) ? "done" : "today"}>{index < Math.min(learner.streak, 6) ? "✓" : "•"}</span><small>{day}</small></div>
+            ))}
+          </div>
+          <button className="small-button secondary full" onClick={() => setShowParent(true)}>Open Parent Space</button>
         </section>
       </aside>
     </div>
   );
 
   const renderLetters = () => {
-    const letter = letterData[activeLetter];
-    return <div className="page-stack">
-      {pageHeader("Sound by sound", "Letter Garden", "Touch a letter, hear its voice, then discover a word it grows inside.", "أ ب ت")}
-      <section className="letter-explorer panel">
-        <div className="letter-stage">
-          <span className="floating-speck one">✦</span><span className="floating-speck two">•</span>
-          <button className="letter-orb arabic" onClick={() => speak(letter[0])} aria-label={`Hear letter ${letter[0]}`}>{letter[0]}</button>
-          <div><span className="soft-pill">Today's sound</span><p>Tap the letter to hear it</p></div>
-        </div>
-        <div className="letter-word-card">
-          <span className="word-emoji">{letter[3]}</span>
-          <div><p className="eyebrow">It lives in this word</p><h2 className="arabic" dir="rtl">{letter[1]}</h2><p>{letter[2]}</p></div>
-          <button className="round-button" onClick={() => speak(letter[1])} aria-label={`Hear ${letter[1]}`}>♪</button>
-        </div>
-      </section>
-      <section className="panel alphabet-panel">
-        <div className="section-title-row"><div><p className="eyebrow">The whole garden</p><h2>28 letters to discover</h2></div><span className="legend"><i /> growing <i /> new</span></div>
-        <div className="alphabet-grid" dir="rtl">{letterData.map((item, index) => <button key={item[0]} className={`${index === activeLetter ? "active" : ""} ${index < 8 ? "learned" : ""}`} onClick={() => { setActiveLetter(index); speak(item[0]); }}><strong className="arabic">{item[0]}</strong><small>{index < 8 ? "Growing" : "New"}</small></button>)}</div>
-      </section>
-    </div>;
+    const letter = letters[activeLetter];
+    return (
+      <div className="page-stack">
+        {pageHeader("Sound by sound", "Letter Garden", "Explore all 28 letters through sound, position, vocabulary, and handwriting.", "أ ب ت")}
+        <section className="letter-explorer panel">
+          <div className="letter-stage">
+            <span className="floating-speck one">✦</span><span className="floating-speck two">•</span>
+            <button className="letter-orb arabic" onClick={() => speak(letter[0])}>{letter[0]}</button>
+            <div><span className="soft-pill">Shape & sound</span><p>Tap the letter to hear it clearly.</p><button className="small-button secondary" onClick={() => { recordProgress(`letter-${letter[0]}`, "letters", 100); goTo("copybook"); setCopyTargetIndex(Math.min(activeLetter, 3)); }}>Practise writing →</button></div>
+          </div>
+          <div className="letter-word-card">
+            <span className="word-emoji">{letter[3]}</span>
+            <div><p className="eyebrow">It lives in this word</p><h2 className="arabic" dir="rtl">{letter[1]}</h2><p>{letter[2]}</p><div className="letter-forms arabic" dir="rtl"><span>{letter[0]}</span><span>ـ{letter[0]}ـ</span><span>ـ{letter[0]}</span></div></div>
+            <button className="round-button" onClick={() => speak(letter[1])}>♪</button>
+          </div>
+        </section>
+        <section className="panel alphabet-panel">
+          <div className="section-title-row"><div><p className="eyebrow">Complete alphabet</p><h2>28 letters · 84 positional forms</h2></div><span className="legend"><i /> practised <i /> new</span></div>
+          <div className="alphabet-grid" dir="rtl">
+            {letters.map((item, index) => (
+              <button key={item[0]} className={`${index === activeLetter ? "active" : ""} ${completedIds.has(`letter-${item[0]}`) ? "learned" : ""}`} onClick={() => { setActiveLetter(index); speak(item[0]); recordProgress(`letter-${item[0]}`, "letters", 90); }}>
+                <strong className="arabic">{item[0]}</strong><small>{completedIds.has(`letter-${item[0]}`) ? "Practised" : "Explore"}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
   };
 
   const renderWords = () => (
     <div className="page-stack">
-      {pageHeader("Meaning you can touch", "Word Workshop", "Explore useful Arabic words through sound, shape, and playful building.", "كَلِمَات")}
+      {pageHeader("Meaning you can touch", "Word Workshop", `${words.filter((item) => item.level <= activeLevel).length} useful words are open at this level, grouped by real-life themes.`, "كَلِمَات")}
       <section className="panel word-shelf">
-        <div className="section-title-row"><div><p className="eyebrow">Picture shelf</p><h2>Tap, look, listen</h2></div><span className="soft-pill">Food · Nature · Home</span></div>
-        <div className="word-card-grid">{wordCards.map((word, index) => <button key={word.arabic} className={`word-card ${word.color} ${index === activeWord ? "active" : ""}`} onClick={() => { setActiveWord(index); speak(word.arabic); }}><span>{word.icon}</span><strong className="arabic" dir="rtl">{word.arabic}</strong><small>{word.english}</small><i>♪</i></button>)}</div>
-      </section>
-      <section className="panel builder-panel">
-        <div className="builder-copy"><p className="eyebrow">Word maker</p><h2>Can you build “book”?</h2><p>Choose the Arabic letters in the right order. Arabic builds from right to left.</p><div className="letter-bank" dir="rtl">{["ب", "ا", "ت", "ك"].map((letter, i) => <button key={`${letter}-${i}`} className="chip arabic" onClick={() => setBuiltWord((value) => value + letter)}>{letter}</button>)}</div></div>
-        <div className="build-zone"><span className="build-icon">📘</span><div className="answer-slots arabic" dir="rtl">{builtWord || "ــ  ــ  ــ  ــ"}</div><div className="builder-actions"><button className="text-button" onClick={() => setBuiltWord("")}>Start again</button><button className="small-button" onClick={() => builtWord === "كتاب" ? speak("أَحْسَنْت! كِتَاب") : speak("حَاوِلْ مَرَّةً أُخْرَى")}>{builtWord === "كتاب" ? "Beautiful! Hear it" : "Check my word"}</button></div></div>
-      </section>
-    </div>
-  );
-
-  const sentenceBank = ["القراءة", "أحب", "أنا"];
-  const renderSentences = () => (
-    <div className="page-stack">
-      {pageHeader("Thoughts become language", "Sentence Studio", "Arrange simple Arabic words and watch a complete idea come alive.", "جُمْلَة")}
-      <section className="panel sentence-workspace">
-        <div className="sentence-prompt"><span className="scene-emoji">📚</span><div><p className="eyebrow">Build this thought</p><h2>“I love reading.”</h2><p>Tap the words in Arabic order.</p></div></div>
-        <div className={`sentence-line ${sentenceResult}`} dir="rtl">{sentenceWords.length ? sentenceWords.map((word, index) => <button key={`${word}-${index}`} className="sentence-piece arabic" onClick={() => setSentenceWords((items) => items.filter((_, i) => i !== index))}>{word}</button>) : <span>ضع الكلمات هنا</span>}</div>
-        <div className="sentence-bank" dir="rtl">{sentenceBank.map((word) => <button key={word} className="chip arabic" disabled={sentenceWords.includes(word)} onClick={() => { setSentenceWords((items) => [...items, word]); setSentenceResult("idle"); }}>{word}</button>)}</div>
-        <div className="sentence-footer"><p className={sentenceResult === "right" ? "success-message" : sentenceResult === "try" ? "try-message" : "helper-message"}>{sentenceResult === "right" ? "Wonderful — a complete sentence has bloomed!" : sentenceResult === "try" ? "Almost there. Remember: start on the right." : "Tip: the first word is أنا."}</p><div><button className="text-button" onClick={() => { setSentenceWords([]); setSentenceResult("idle"); }}>Clear</button><button className="primary-button" onClick={() => { const right = sentenceWords.join(" ") === "أنا أحب القراءة"; setSentenceResult(right ? "right" : "try"); if (right) speak("أَنَا أُحِبُّ الْقِرَاءَة"); }}>Check sentence</button></div></div>
-      </section>
-      <section className="pattern-row">{[["أَنَا أَشْرَبُ الْمَاءَ", "I drink water", "💧"], ["هَذَا بَيْتِي", "This is my home", "🏠"], ["أُمِّي تَقْرَأُ", "My mother reads", "📖"]].map((item) => <button key={item[0]} className="pattern-card" onClick={() => speak(item[0])}><span>{item[2]}</span><strong className="arabic" dir="rtl">{item[0]}</strong><small>{item[1]} · ♪</small></button>)}</section>
-    </div>
-  );
-
-  const renderStories = () => {
-    const story = stories[storyIndex];
-    return <div className="page-stack">
-      {pageHeader("Listen with wonder", "Story Cove", "Short, gentle tales narrated in Arabic, with just enough help in English.", "حِكَايَات")}
-      <section className="story-reader panel">
-        <div className="story-cover"><img src="/kalemati-world.png" alt="The paper-and-clay word portals of Kalemati" /><span className="story-number">Story {storyIndex + 1} of {stories.length}</span></div>
-        <div className="story-content"><p className="eyebrow">{story.level}</p><h2>{story.title}</h2><h3 className="arabic" dir="rtl">{story.arabicTitle}</h3><p className="arabic story-text" dir="rtl">{story.text}</p><div className="vocabulary-row">{story.words.map((word) => <span key={word}>{word}</span>)}</div><div className="reader-actions"><button className="primary-button" onClick={() => speak(story.text)}>▶ Listen in Arabic</button><button className="round-button" onClick={() => speak(story.arabicTitle)} aria-label="Hear story title">♪</button></div></div>
-      </section>
-      <section className="story-list">{stories.map((item, index) => <button key={item.title} className={`story-list-card ${index === storyIndex ? "active" : ""}`} onClick={() => setStoryIndex(index)}><span>{item.icon}</span><div><strong>{item.title}</strong><small className="arabic" dir="rtl">{item.arabicTitle}</small></div><i>{index === storyIndex ? "Playing" : "Open"}</i></button>)}</section>
-    </div>;
-  };
-
-  const renderHomework = () => {
-    const completed = Object.values(completedTasks).filter(Boolean).length;
-    return <div className="page-stack">
-      {pageHeader("A little, often", "Homework Nest", "A calm weekly plan that helps learning settle without feeling heavy.", "وَاجِبَاتِي")}
-      <section className="homework-summary panel"><div className="nest-graphic"><span>🥚</span><span>🥚</span><span>🐣</span></div><div><p className="eyebrow">This week's nest</p><h2>{completed} of {homeworkTasks.length} tiny tasks complete</h2><p>Due Friday · about 21 minutes altogether</p></div><div className="ring-progress" style={{ "--percent": `${(completed / homeworkTasks.length) * 100}%` } as CSSProperties}><strong>{Math.round((completed / homeworkTasks.length) * 100)}%</strong></div></section>
-      <section className="homework-list panel">{homeworkTasks.map((task, index) => <button key={task[0]} className={completedTasks[index] ? "complete" : ""} onClick={() => setCompletedTasks((items) => ({ ...items, [index]: !items[index] }))}><span className="task-check">{completedTasks[index] ? "✓" : ""}</span><span className="task-icon">{task[3]}</span><span><strong>{task[0]}</strong><small>{task[1]}</small></span><em>{task[2]}</em></button>)}</section>
-      <p className="parent-tip"><span>☼</span><strong>Grown-up tip</strong> Celebrate effort, not perfect pronunciation. One warm “I heard you try” goes a long way.</p>
-    </div>;
-  };
-
-  const renderCopybook = () => (
-    <div className="page-stack">
-      {pageHeader("Slow hands, strong memory", "My Copybook", "Trace the guide with a finger, mouse, or pen. Clear the page whenever you wish.", "نَسْخ")}
-      <section className="copy-panel panel">
-        <div className="copy-toolbar"><div><p className="eyebrow">Practice page 04</p><h2 className="arabic" dir="rtl">حـ · ـحـ · ـح</h2></div><div><button className="round-button" onClick={() => speak("حَاء")}>♪</button><button className="small-button secondary" onClick={clearCanvas}>Clear page</button></div></div>
-        <div className="trace-board"><div className="trace-letter arabic">ح</div><canvas ref={canvasRef} width={960} height={360} aria-label="Drawing area for tracing the Arabic letter Haa" onPointerDown={(event) => drawPoint(event, true)} onPointerMove={(event) => drawPoint(event, false)} onPointerUp={stopDrawing} onPointerCancel={stopDrawing} onPointerLeave={stopDrawing} /></div>
-        <div className="copy-cues"><span><i>1</i> Start at the glowing dot</span><span><i>2</i> Follow the soft path</span><span><i>3</i> Try once without the guide</span></div>
-      </section>
-    </div>
-  );
-
-  const paintPetal = (index: number) => setPetals((items) => items.map((item, i) => i === index ? color : item));
-  const renderColoring = () => (
-    <div className="page-stack">
-      {pageHeader("Color makes meaning stick", "Color & Learn", "Choose a calm color, fill the picture, and say the Arabic word aloud.", "لَوِّنْ")}
-      <section className="coloring-layout panel">
-        <div className="color-sidebar"><p className="eyebrow">Your palette</p><h2>Pick a color</h2><div className="swatches">{palette.map((shade) => <button key={shade} aria-label={`Choose color ${shade}`} className={color === shade ? "active" : ""} style={{ background: shade }} onClick={() => setColor(shade)} />)}</div><button className="small-button secondary" onClick={() => setPetals(petals.map(() => "#fffaf0"))}>Start fresh</button><p className="color-tip">Tap each petal to fill it. There are no wrong colors here.</p></div>
-        <div className="color-canvas">
-          <span className="sun-doodle">☀</span><span className="cloud-doodle">☁</span>
-          <div className="css-flower" aria-label="Coloring flower">{petals.map((shade, index) => <button key={index} className={`petal petal-${index + 1}`} style={{ background: shade }} onClick={() => paintPetal(index)} aria-label={`Color petal ${index + 1}`} />)}<button className="flower-center" style={{ background: petals[0] === "#fffaf0" ? "#f2c968" : color }} aria-label="Color flower center" /><span className="stem" /><button className="leaf leaf-one" style={{ background: petals[4] }} onClick={() => paintPetal(4)} aria-label="Color left leaf" /><button className="leaf leaf-two" style={{ background: petals[5] }} onClick={() => paintPetal(5)} aria-label="Color right leaf" /></div>
-          <button className="color-word" onClick={() => speak("زَهْرَة")}><strong className="arabic" dir="rtl">زَهْرَة</strong><small>flower · tap to hear ♪</small></button>
+        <div className="section-title-row word-filter-row">
+          <div><p className="eyebrow">Vocabulary library</p><h2>Look, listen, remember</h2></div>
+          <div className="category-tabs">{wordCategories.map((category) => <button key={category} className={wordCategory === category ? "active" : ""} onClick={() => setWordCategory(category)}>{category}</button>)}</div>
+        </div>
+        {activeWord && (
+          <div className="word-focus-strip">
+            <span>{activeWord.icon}</span>
+            <div><small>{activeWord.category} · Level {activeWord.level}</small><strong className="arabic" dir="rtl">{activeWord.arabic}</strong><em>{activeWord.english}</em></div>
+            <button className="round-button" onClick={() => { speak(activeWord.arabic); recordProgress(`word-${activeWord.id}`, "words", 90); }}>♪</button>
+          </div>
+        )}
+        <div className="word-card-grid expanded-words">
+          {visibleWords.map((word) => (
+            <button key={word.id} className={`word-card ${word.color} ${word.id === activeWord?.id ? "active" : ""}`} onClick={() => { setActiveWordId(word.id); speak(word.arabic); }}>
+              <span>{word.icon}</span><strong className="arabic" dir="rtl">{word.arabic}</strong><small>{word.english}</small><i>{completedIds.has(`word-${word.id}`) ? "✓" : "♪"}</i>
+            </button>
+          ))}
         </div>
       </section>
+      <section className="panel builder-panel">
+        <div className="builder-copy"><p className="eyebrow">Level {activeLevel} word maker</p><h2>Build “{wordChallenge.english}”</h2><p>Choose the letters in Arabic reading order. Tap a placed letter to remove it.</p><div className="letter-bank" dir="rtl">{wordChallenge.letters.map((letter, index) => <button key={`${letter}-${index}`} className="chip arabic" onClick={() => { setBuiltLetters((items) => [...items, letter]); setWordResult("idle"); }}>{letter}</button>)}</div></div>
+        <div className={`build-zone ${wordResult}`}><span className="build-icon">✦</span><div className="answer-slots arabic" dir="rtl">{builtLetters.length ? builtLetters.map((letter, index) => <button key={`${letter}-${index}`} onClick={() => setBuiltLetters((items) => items.filter((_, i) => i !== index))}>{letter}</button>) : "ــ  ــ  ــ"}</div><strong className="challenge-target arabic" dir="rtl">{wordChallenge.display}</strong><div className="builder-actions"><button className="text-button" onClick={() => { setBuiltLetters([]); setWordResult("idle"); }}>Start again</button><button className="small-button" onClick={async () => { const right = builtWord === wordChallenge.word; setWordResult(right ? "right" : "try"); if (right) { speak(wordChallenge.display); await recordProgress(`word-build-${activeLevel}`, "words", 100); } }}>{wordResult === "right" ? "Wonderful ✓" : "Check my word"}</button></div>{wordResult === "try" && <p className="try-message">Look closely at the model, then move one letter at a time.</p>}</div>
+      </section>
     </div>
   );
+
+  const renderSentences = () => (
+    <div className="page-stack">
+      {pageHeader("A real sentence engine", "Sentence Studio", `${levelSentences.length} guided challenges at this level, with hints, grammar feedback, audio, and saved mastery.`, "جُمْلَة")}
+      <section className="sentence-course-strip panel">
+        <div><p className="eyebrow">Level {activeLevel} set</p><h2>{activeLevelInfo.focus[0]} in context</h2></div>
+        <div className="sentence-dots">{levelSentences.map((item, index) => <button key={item.id} className={`${index === sentenceIndex % levelSentences.length ? "active" : ""} ${completedIds.has(item.id) ? "complete" : ""}`} onClick={() => { setSentenceIndex(index); setSentenceWords([]); setSentenceResult("idle"); }}>{completedIds.has(item.id) ? "✓" : index + 1}</button>)}</div>
+        <strong>{completedIds.has(sentence.id) ? "Mastered" : `${sentenceIndex + 1} / ${levelSentences.length}`}</strong>
+      </section>
+      <section className="panel sentence-workspace advanced-sentence">
+        <div className="sentence-prompt"><span className="scene-emoji">💬</span><div><p className="eyebrow">Build this thought</p><h2>{sentence.prompt}</h2><p>Tap or drag the Arabic words into the sentence line.</p></div><button className="round-button" onClick={() => speak(sentence.spoken)}>♪</button></div>
+        <div className={`sentence-line ${sentenceResult}`} dir="rtl" onDragOver={(event) => event.preventDefault()} onDrop={(event: DragEvent<HTMLDivElement>) => addSentenceWord(event.dataTransfer.getData("text/plain"))}>
+          {sentenceWords.length ? sentenceWords.map((word, index) => <button key={`${word}-${index}`} className="sentence-piece arabic" onClick={() => setSentenceWords((items) => items.filter((_, i) => i !== index))}>{word}</button>) : <span>اسحب الكلمات إلى هنا · Drop words here</span>}
+        </div>
+        <div className="sentence-bank" dir="rtl">{sentence.bank.map((word, index) => { const total = sentence.bank.filter((item) => item === word).length; const used = sentenceWords.filter((item) => item === word).length; const disabled = used >= total; return <button key={`${word}-${index}`} className="chip arabic" disabled={disabled} draggable={!disabled} onDragStart={(event) => event.dataTransfer.setData("text/plain", word)} onClick={() => addSentenceWord(word)}>{word}</button>; })}</div>
+        <div className="sentence-tools"><button className="hint-button" onClick={() => setShowHint((value) => !value)}>☼ {showHint ? "Hide hint" : "Gentle hint"}</button>{showHint && <p>{sentence.hint}</p>}</div>
+        <div className="sentence-footer">
+          <div className="feedback-copy">{sentenceResult === "right" ? <><strong className="success-message">Beautifully built!</strong><p>{sentence.explanation}</p></> : sentenceResult === "try" ? <><strong className="try-message">Almost there.</strong><p>{sentence.hint}</p></> : <p className="helper-message">Arabic begins on the right. You can remove any placed word by tapping it.</p>}</div>
+          <div><button className="text-button" onClick={() => { setSentenceWords([]); setSentenceResult("idle"); }}>Clear</button>{sentenceResult === "right" ? <button className="primary-button" onClick={nextSentence}>Next sentence →</button> : <button className="primary-button" onClick={checkSentence}>Check sentence</button>}</div>
+        </div>
+      </section>
+      <section className="grammar-lens panel"><span>◎</span><div><p className="eyebrow">Grammar lens</p><h3>{sentence.explanation}</h3><p>Grammar appears only when it helps the learner understand a pattern—never as a wall of rules.</p></div><button className="small-button secondary" onClick={() => speak(sentence.spoken)}>Hear naturally</button></section>
+    </div>
+  );
+
+  const renderStories = () => (
+    <div className="page-stack">
+      {pageHeader("Listen, read, understand", "Story Library", "Twelve levelled stories plus anything you add in Content Studio, each with vocabulary and comprehension.", "حِكَايَات")}
+      <section className="story-reader panel expanded-reader">
+        <div className="story-cover"><Image src="/kalemati-world.png" alt="The paper-and-clay word portals of Kalemati" fill sizes="(max-width: 720px) 100vw, 44vw" /><span className="story-number">Level {activeLevel} · {story.minutes} min</span></div>
+        <div className="story-content"><p className="eyebrow">Story {storyIndex + 1} of {levelStories.length}</p><h2>{story.title}</h2><h3 className="arabic" dir="rtl">{story.arabicTitle}</h3><p className="arabic story-text" dir="rtl">{story.text}</p><div className="vocabulary-row">{story.words.map((word) => <span key={word}>{word}</span>)}</div><div className="reader-actions"><button className="primary-button" onClick={() => speak(story.text)}>▶ Listen in Arabic</button><button className="small-button secondary" onClick={() => recordProgress(story.id, "stories", 90)}>Mark as read ✓</button></div></div>
+      </section>
+      <section className="story-comprehension panel"><div><p className="eyebrow">Meaning check</p><h2>{story.question}</h2></div><div className="answer-options">{story.options.map((option) => <button key={option} className={`${storyAnswer === option ? "selected" : ""} ${storyAnswer && option === story.answer ? "correct" : ""}`} onClick={async () => { setStoryAnswer(option); if (option === story.answer) await recordProgress(`${story.id}-question`, "stories", 100); }}>{option}</button>)}</div><p>{storyAnswer ? storyAnswer === story.answer ? "Yes — you understood the heart of the story. ✦" : "Listen once more and look for the key detail." : "Choose the best answer after listening or reading."}</p></section>
+      <section className="story-list expanded-story-list">{levelStories.map((item, index) => <button key={item.id} className={`story-list-card ${index === storyIndex ? "active" : ""}`} onClick={() => { setStoryIndex(index); setStoryAnswer(""); }}><span>{item.icon}</span><div><strong>{item.title}</strong><small className="arabic" dir="rtl">{item.arabicTitle}</small></div><i>{completedIds.has(item.id) ? "Read ✓" : `${item.minutes} min`}</i></button>)}</section>
+    </div>
+  );
+
+  const renderHomework = () => (
+    <div className="page-stack">
+      {pageHeader("A little, often", "Homework Nest", "A balanced weekly plan generated from the learner's current level and saved to their account.", "وَاجِبَاتِي")}
+      <section className="homework-summary panel"><div className="nest-graphic"><span>◌</span><span>◌</span><span>✦</span></div><div><p className="eyebrow">This week · Level {activeLevel}</p><h2>{completedHomework} of {weeklyTasks.length} meaningful tasks complete</h2><p>About {weeklyTasks.reduce((total, task) => total + task.minutes, 0)} calm minutes altogether</p></div><div className="ring-progress" style={{ "--percent": `${(completedHomework / weeklyTasks.length) * 100}%` } as CSSProperties}><strong>{Math.round((completedHomework / weeklyTasks.length) * 100)}%</strong></div></section>
+      <section className="homework-list panel">{weeklyTasks.map((task) => <button key={task.id} className={completedIds.has(task.id) ? "complete" : ""} onClick={async () => { if (!completedIds.has(task.id)) await recordProgress(task.id, "homework", 100); else goTo(task.view); }}><span className="task-check">{completedIds.has(task.id) ? "✓" : ""}</span><span className="task-icon">{task.icon}</span><span><strong>{task.title}</strong><small>{task.detail}</small></span><em>{completedIds.has(task.id) ? "Open again" : `${task.minutes} min`}</em></button>)}</section>
+      <p className="parent-tip"><span>☼</span><strong>Grown-up tip</strong> Praise effort and curiosity. A warm “I noticed how carefully you listened” builds more confidence than correcting every sound.</p>
+    </div>
+  );
+
+  const renderCopybook = () => {
+    const target = copyTargets[copyTargetIndex];
+    return (
+      <div className="page-stack">
+        {pageHeader("Slow hands, strong memory", "My Copybook", "Move from single letters to connected words and short sentences, using a finger, mouse, or pen.", "نَسْخ")}
+        <section className="copy-target-strip panel"><div><p className="eyebrow">Choose a practice card</p><h2>Letters → words → sentences</h2></div><div>{copyTargets.map((item, index) => <button key={item.value} className={`arabic ${copyTargetIndex === index ? "active" : ""}`} onClick={() => { setCopyTargetIndex(index); clearTrace(); }}>{item.value}</button>)}</div></section>
+        <section className="copy-panel panel">
+          <div className="copy-toolbar"><div><p className="eyebrow">Guided practice · {target.label}</p><h2 className="arabic" dir="rtl">{target.guide}</h2></div><div><button className="round-button" onClick={() => speak(target.value)}>♪</button><button className="small-button secondary" onClick={clearTrace}>Clear page</button><button className="small-button" onClick={() => recordProgress(`copy-${copyTargetIndex}`, "copybook", 100)}>Save practice ✓</button></div></div>
+          <div className="trace-board"><div className={`trace-letter arabic ${target.value.length > 3 ? "trace-word" : ""}`}>{target.value}</div><canvas ref={traceCanvasRef} width={960} height={360} aria-label={`Drawing area for tracing ${target.label}`} onPointerDown={beginTrace} onPointerMove={moveTrace} onPointerUp={() => { tracing.current = false; }} onPointerCancel={() => { tracing.current = false; }} onPointerLeave={() => { tracing.current = false; }} /></div>
+          <div className="copy-cues"><span><i>1</i> Start at the coral dot</span><span><i>2</i> Follow the pale guide</span><span><i>3</i> Repeat without the guide</span></div>
+        </section>
+      </div>
+    );
+  };
+
+  const renderColoring = () => {
+    const scene = coloringScenes.find((item) => item.id === selectedSceneId)!;
+    const sceneStrokes = coloringBook[selectedSceneId] ?? [];
+    return (
+      <div className="page-stack">
+        {pageHeader("Create, speak, remember", "Color Studio", "Eight original line-art worlds with real brushes, eraser, undo, account saving, downloads, and Arabic audio.", "لَوِّنْ")}
+        <section className="color-library panel"><div><p className="eyebrow">My coloring book</p><h2>{coloringScenes.length} scenes across the learning journey</h2></div><div className="scene-tabs">{coloringScenes.map((item) => <button key={item.id} className={`${selectedSceneId === item.id ? "active" : ""} ${coloringBook[item.id]?.length ? "painted" : ""}`} onClick={() => { setSelectedSceneId(item.id); setArtMessage(""); }}><span>{item.icon}</span><strong>{item.title}</strong><small className="arabic">{item.arabic}</small><i>Level {item.level}</i></button>)}</div></section>
+        <section className="advanced-coloring panel">
+          <div className="art-toolbar">
+            <div className="tool-section"><p className="eyebrow">Colors</p><div className="swatches horizontal">{palette.map((shade) => <button key={shade} aria-label={`Choose ${shade}`} className={brushColor === shade && !eraserOn ? "active" : ""} style={{ background: shade }} onClick={() => { setBrushColor(shade); setEraserOn(false); }} />)}</div></div>
+            <div className="tool-section"><p className="eyebrow">Brush</p><div className="brush-sizes">{[12, 24, 42].map((size) => <button key={size} className={brushSize === size ? "active" : ""} onClick={() => { setBrushSize(size); setEraserOn(false); }}><i style={{ width: size / 2, height: size / 2 }} /></button>)}</div></div>
+            <div className="tool-actions"><button className={eraserOn ? "active" : ""} onClick={() => setEraserOn((value) => !value)}>⌫ Eraser</button><button disabled={!sceneStrokes.length} onClick={undoPaint}>↶ Undo</button><button disabled={!sceneStrokes.length} onClick={() => setColoringBook((book) => ({ ...book, [selectedSceneId]: [] }))}>Clear</button></div>
+          </div>
+          <div className="artboard-wrap"><canvas ref={colorCanvasRef} width={1000} height={650} aria-label={`Coloring page: ${scene.title}`} onPointerDown={beginPaint} onPointerMove={movePaint} onPointerUp={() => { painting.current = false; }} onPointerCancel={() => { painting.current = false; }} onPointerLeave={() => { painting.current = false; }} /><button className="art-word-card" onClick={() => speak(scene.arabic)}><strong className="arabic" dir="rtl">{scene.arabic}</strong><span>{scene.word} · tap to hear ♪</span></button></div>
+          <div className="art-footer"><p>{artMessage || `${sceneStrokes.length} brush strokes · creativity has no wrong answer.`}</p><div><button className="small-button secondary" onClick={downloadArtwork}>Download picture</button><button className="primary-button" onClick={saveArtwork}>Save to my gallery</button></div></div>
+        </section>
+      </div>
+    );
+  };
 
   const renderGames = () => (
     <div className="page-stack">
-      {pageHeader("Play is practice in disguise", "Game Meadow", "Quick learning games that feel light, friendly, and wonderfully replayable.", "أَلْعَاب")}
+      {pageHeader("Play is practice in disguise", "Game Meadow", "Twelve adaptive rounds covering sound, meaning, grammar, and comprehension across six levels.", "أَلْعَاب")}
+      <section className="game-progress panel"><div><p className="eyebrow">Level {activeLevel} challenge path</p><h2>{levelGames.length} rounds ready</h2></div><div>{levelGames.map((item, index) => <button key={item.id} className={`${index === gameIndex ? "active" : ""} ${completedIds.has(item.id) ? "complete" : ""}`} onClick={() => { setGameIndex(index); setGameResult("idle"); }}>{completedIds.has(item.id) ? "✓" : index + 1}</button>)}</div></section>
       <section className="game-feature panel">
-        <div className="game-intro"><span className="game-badge">Round 1 of 5</span><h2>Which picture matches this word?</h2><strong className="arabic target-word" dir="rtl">قَمَر</strong><button className="round-button" onClick={() => speak("قَمَر")}>♪</button></div>
-        <div className="game-options">{[["☀️", "sun"], ["🌙", "moon"], ["⭐", "star"]].map((option) => <button key={option[1]} onClick={() => { const right = option[1] === "moon"; setGameResult(right ? "right" : "try"); if (right) speak("أَحْسَنْت! قَمَر"); }}><span>{option[0]}</span><small>{option[1]}</small></button>)}</div>
-        <div className={`game-feedback ${gameResult}`}>{gameResult === "right" ? "✦ Brilliant! قَمَر means moon." : gameResult === "try" ? "That is a lovely guess. Listen once more." : "Choose the picture that feels right."}</div>
+        <div className="game-intro"><span className="game-badge">Round {gameIndex + 1} of {levelGames.length}</span><h2>{game.prompt}</h2><strong className="arabic target-word" dir="rtl">{game.arabic}</strong><button className="round-button" onClick={() => speak(game.spoken)}>♪</button></div>
+        <div className="game-options">{game.options.map((option) => <button key={option.label} onClick={async () => { const right = option.label === game.answer; setGameResult(right ? "right" : "try"); if (right) { speak(game.spoken); await recordProgress(game.id, "games", 100); } }}><span className={option.display.length > 2 ? "arabic game-text-option" : ""}>{option.display}</span><small>{option.label}</small></button>)}</div>
+        <div className={`game-feedback ${gameResult}`}>{gameResult === "right" ? <><span>✦ Excellent — this pattern is now saved.</span><button onClick={() => { setGameIndex((index) => (index + 1) % levelGames.length); setGameResult("idle"); }}>Next round →</button></> : gameResult === "try" ? "A thoughtful try. Listen once more, then compare the choices." : "Choose the answer that fits best."}</div>
       </section>
-      <section className="mini-game-grid">{[["Sound Safari", "Hear a sound and find its letter", "🎧", "4 min", "mint"], ["Word Picnic", "Pack pictures into the right baskets", "🧺", "6 min", "sun"], ["Sentence Steps", "Build a bridge one word at a time", "🌉", "5 min", "lavender"]].map((game) => <button key={game[0]} className={`mini-game ${game[4]}`}><span>{game[2]}</span><div><h3>{game[0]}</h3><p>{game[1]}</p><small>{game[3]} · Play →</small></div></button>)}</section>
+      <section className="mini-game-grid">{[["Sound Safari", "Hear, compare, and identify Arabic sounds", "◉", "letters", "mint"], ["Word Constellations", "Connect words by theme and meaning", "✦", "words", "sun"], ["Sentence Steps", "Build increasingly rich Arabic sentences", "≋", "sentences", "lavender"], ["Story Detective", "Find clues inside narrated stories", "◐", "stories", "coral"], ["Speed Copy", "Strengthen letter memory through movement", "✎", "copybook", "sky"], ["Creative Color", "Learn vocabulary while making art", "✿", "coloring", "rose"]].map((item) => <button key={item[0]} className={`mini-game ${item[4]}`} onClick={() => goTo(item[3] as ViewId)}><span>{item[2]}</span><div><h3>{item[0]}</h3><p>{item[1]}</p><small>Open activity →</small></div></button>)}</section>
     </div>
   );
 
   const renderTeacher = () => (
     <div className="page-stack">
-      {pageHeader("A real person, right when you need one", "Meet a Teacher", "Book a warm, face-to-face Arabic lesson tailored to your learner.", "مُعَلِّمَتِي")}
+      {pageHeader("Human guidance, exactly when useful", "Meet a Teacher", "Request a focused live lesson, choose the learning goal, and keep the request in the parent account.", "مُعَلِّمَتِي")}
       <section className="teacher-layout">
-        <div className="teacher-card panel"><div className="teacher-avatar">ن</div><div className="teacher-live">Available this week</div><div className="teacher-info"><p className="eyebrow">Recommended for Layla</p><h2>Ms. Noor</h2><p className="arabic" dir="rtl">الْمُعَلِّمَةُ نُور</p><p>Children's Arabic specialist · 8 years teaching · English & Arabic</p><div className="teacher-tags"><span>Patient pace</span><span>Story-led</span><span>Beginner friendly</span></div><blockquote>“We will turn the sounds you know into your very first conversation.”</blockquote></div></div>
-        <div className="booking-card panel"><p className="eyebrow">25-minute live lesson</p><h2>Choose a gentle time</h2><div className="date-strip"><button>‹</button><div><small>MON</small><strong>10</strong></div><div className="active"><small>TUE</small><strong>11</strong></div><div><small>WED</small><strong>12</strong></div><div><small>THU</small><strong>13</strong></div><button>›</button></div><div className="time-slots">{["3:30 PM", "4:15 PM", "5:00 PM", "5:45 PM"].map((slot) => <button key={slot} className={teacherSlot === slot ? "active" : ""} onClick={() => { setTeacherSlot(slot); setBookingConfirmed(false); }}>{slot}</button>)}</div><button className="primary-button full" disabled={!teacherSlot} onClick={() => setBookingConfirmed(true)}>{bookingConfirmed ? "Lesson request sent ✓" : teacherSlot ? `Request ${teacherSlot}` : "Choose a time first"}</button><p className="booking-note">A parent confirms the lesson before it is booked. No payment is taken in this prototype.</p></div>
+        <div className="teacher-card panel"><div className="teacher-avatar" /><div className="teacher-live">Available this week</div><div className="teacher-info"><p className="eyebrow">Recommended for Level {activeLevel}</p><h2>Ms. Noor</h2><p className="arabic" dir="rtl">الْمُعَلِّمَةُ نُور</p><p>Children&apos;s Arabic specialist · 8 years teaching · English & Arabic</p><div className="teacher-tags"><span>Patient pace</span><span>Story-led</span><span>Beginner to B2</span></div><blockquote>“We will build from what your learner already knows and turn it into confident communication.”</blockquote></div></div>
+        <div className="booking-card panel"><p className="eyebrow">25-minute live lesson request</p><h2>Choose a focus and time</h2><label className="focus-select"><span>Lesson focus</span><select value={lessonFocus} onChange={(event) => setLessonFocus(event.target.value)}><option>Conversation confidence</option><option>Letter pronunciation</option><option>Sentence building</option><option>Reading comprehension</option><option>Writing feedback</option></select></label><div className="date-strip"><button>‹</button><div><small>TUE</small><strong>11</strong></div><div className="active"><small>WED</small><strong>12</strong></div><div><small>THU</small><strong>13</strong></div><div><small>FRI</small><strong>14</strong></div><button>›</button></div><div className="time-slots">{["3:30 PM", "4:15 PM", "5:00 PM", "5:45 PM"].map((slot) => <button key={slot} className={teacherSlot === slot ? "active" : ""} onClick={() => { setTeacherSlot(slot); setBookingConfirmed(false); }}>{slot}</button>)}</div><button className="primary-button full" disabled={!teacherSlot} onClick={async () => { const data = await postAction({ action: "booking", teacherName: "Ms. Noor", lessonSlot: `Wednesday 12 August · ${teacherSlot}`, focus: lessonFocus }); if (data?.booking) setBookings((items) => [data.booking, ...items]); setBookingConfirmed(true); }}>{bookingConfirmed ? "Lesson request saved ✓" : teacherSlot ? `Request ${teacherSlot}` : "Choose a time first"}</button><p className="booking-note">A parent reviews the request before confirmation. No payment is taken in this prototype.</p></div>
       </section>
+      {bookings.length > 0 && <section className="panel booking-history"><div><p className="eyebrow">Saved requests</p><h2>Your lesson plan</h2></div>{bookings.slice(0, 3).map((booking, index) => <div key={`${booking.lessonSlot}-${index}`}><span>☏</span><strong>{booking.teacherName}</strong><p>{booking.lessonSlot} · {booking.focus}</p><em>{booking.status}</em></div>)}</section>}
     </div>
   );
 
@@ -396,17 +1034,64 @@ export default function Home() {
       <aside className="sidebar">
         <button className="brand" onClick={() => goTo("home")} aria-label="Kalemati home"><span className="brand-cube arabic">ك</span><span><strong>Kalemati</strong><small className="arabic" dir="rtl">كَلِماتي</small></span></button>
         <nav aria-label="Main navigation">{navGroups.map((group) => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => goTo(item.id)}><span className={`nav-icon ${item.id === "letters" ? "arabic" : ""}`}>{item.icon}</span><em>{item.label}</em>{view === item.id && <i />}</button>)}</div>)}</nav>
-        <div className="sidebar-footer"><span className="helper-dot">✦</span><div><strong>Need a little help?</strong><button onClick={() => goTo("teacher")}>Open a hint →</button></div></div>
+        <div className="sidebar-footer"><span className="helper-dot">✦</span><div><strong>Level {activeLevel} · {activeLevelInfo.cefr}</strong><button onClick={() => setShowParent(true)}>Parent controls →</button></div></div>
       </aside>
 
       <main ref={mainRef}>
-        <header className="topbar"><div><span className="today-dot" /> <span>{view === "home" ? "Sunday, 9 August" : navGroups.flatMap((group) => group.items).find((item) => item.id === view)?.label}</span></div><div className="top-actions"><button className="streak-button" onClick={() => setShowAchievements(true)}><span>✦</span> 7 day streak</button><button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label={soundOn ? "Turn sound off" : "Turn sound on"}>{soundOn ? "♪" : "×"}</button><button className="parent-button" onClick={() => setShowParent(true)}><span>♧</span> Parent Space</button><button className="mini-avatar" onClick={() => setShowAchievements(true)} aria-label="Open Layla's achievements">L</button></div></header>
+        <header className="topbar expanded-topbar">
+          <div><span className="today-dot" /><span>{view === "home" ? "Monday, 10 August" : navGroups.flatMap((group) => group.items).find((item) => item.id === view)?.label}</span></div>
+          <div className="top-actions">
+            <label className="level-switcher"><span>Path</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>{level.id}. {level.name} ({level.cefr})</option>)}</select></label>
+            <button className={`save-state ${syncState}`}>{syncState === "saved" ? "✓ Saved" : syncState === "saving" ? "Saving…" : syncState === "preview" ? "Preview" : syncState === "error" ? "Retry save" : "Connecting…"}</button>
+            <button className="streak-button" onClick={() => setShowAchievements(true)}><span>✦</span>{learner.streak} day streak</button>
+            <button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label={soundOn ? "Turn sound off" : "Turn sound on"}>{soundOn ? "♪" : "×"}</button>
+            <button className="parent-button" onClick={() => setShowParent(true)}><span>♧</span> Parent Space</button>
+            <button className="mini-avatar" onClick={() => setShowAchievements(true)}>{learner.name.slice(0, 1).toUpperCase()}</button>
+          </div>
+        </header>
         <div className="content">{renderView()}</div>
       </main>
 
-      {showAchievements && <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowAchievements(false)}><section className="modal-card achievement-modal" role="dialog" aria-modal="true" aria-labelledby="achievement-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowAchievements(false)} aria-label="Close achievements">×</button><p className="eyebrow">Layla's keepsake shelf</p><h2 id="achievement-title">Small wins, beautifully remembered.</h2><div className="badge-shelf">{[["★", "Brave Storyteller", "3 stories"], ["أ", "Letter Gardener", "8 letters"], ["✦", "Seven-day Spark", "7 days"], ["◐", "Moon Listener", "New"], ["✎", "Careful Hand", "12 traces"], ["◆", "Playful Thinker", "5 games"]].map((badge, i) => <div className={i === 3 ? "new" : ""} key={badge[1]}><span className={i === 1 ? "arabic" : ""}>{badge[0]}</span><strong>{badge[1]}</strong><small>{badge[2]}</small></div>)}</div><button className="primary-button full" onClick={() => setShowAchievements(false)}>Keep exploring</button></section></div>}
+      {showAchievements && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowAchievements(false); }}>
+          <section className="modal-card achievement-modal" role="dialog" aria-modal="true" aria-labelledby="achievement-title">
+            <button className="modal-close" onClick={() => setShowAchievements(false)}>×</button>
+            <p className="eyebrow">{learner.name}&apos;s keepsake shelf</p>
+            <h2 id="achievement-title">Every kind of growth deserves a place.</h2>
+            <div className="badge-shelf">{[
+              ["★", "First Portal", progress.length ? `${progress.length} activities` : "Begin here"],
+              ["أ", "Letter Gardener", `${progress.filter((item) => item.track === "letters").length} letters`],
+              ["≋", "Sentence Maker", `${progress.filter((item) => item.track === "sentences").length} sentences`],
+              ["◐", "Story Thinker", `${progress.filter((item) => item.track === "stories").length} stories`],
+              ["✎", "Careful Hand", `${progress.filter((item) => item.track === "copybook").length} pages`],
+              ["✿", "Word Artist", `${Object.values(coloringBook).filter((item) => item.length).length} artworks`],
+            ].map((badge, index) => <div className={index === 0 && progress.length < 2 ? "new" : ""} key={badge[1]}><span className={index === 1 ? "arabic" : ""}>{badge[0]}</span><strong>{badge[1]}</strong><small>{badge[2]}</small></div>)}</div>
+            <button className="primary-button full" onClick={() => setShowAchievements(false)}>Keep exploring</button>
+          </section>
+        </div>
+      )}
 
-      {showParent && <div className="modal-backdrop" role="presentation" onMouseDown={() => setShowParent(false)}><section className="modal-card parent-modal" role="dialog" aria-modal="true" aria-labelledby="parent-title" onMouseDown={(event) => event.stopPropagation()}><button className="modal-close" onClick={() => setShowParent(false)} aria-label="Close Parent Space">×</button><div className="parent-modal-header"><div><p className="eyebrow">Private grown-up view</p><h2 id="parent-title">Layla is building a lovely rhythm.</h2><p>Clear progress without pressure, plus one useful next step.</p></div><div className="parent-score"><strong>86%</strong><span>weekly goal</span></div></div><div className="parent-metrics"><div><span>32 min</span><small>Learning time</small><em>+8 this week</em></div><div><span>8</span><small>Letters growing</small><em>2 nearly fluent</em></div><div><span>14</span><small>Words remembered</small><em>Strong recall</em></div></div><div className="parent-detail-grid"><section><div className="section-title-row compact"><div><p className="eyebrow">This week</p><h3>Calm, consistent visits</h3></div></div><div className="activity-chart">{[38, 58, 42, 75, 52, 84, 64].map((height, i) => <div key={i}><span style={{ height: `${height}%` }} /><small>{["M", "T", "W", "T", "F", "S", "S"][i]}</small></div>)}</div></section><section className="teacher-note"><p className="eyebrow">From Ms. Noor</p><blockquote>“Layla hears the difference between ح and ه beautifully. Next, we’ll practise using ح inside short words.”</blockquote><button className="text-button" onClick={() => { setShowParent(false); goTo("teacher"); }}>Plan a live lesson →</button></section></div><div className="parent-focus"><span>☼</span><div><strong>One focus for this week</strong><p>Say three ح words together during everyday moments: حُبّ، حَلِيب، حَدِيقَة.</p></div></div></section></div>}
+      {showParent && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowParent(false); }}>
+          <section className="modal-card parent-modal expanded-parent-modal" role="dialog" aria-modal="true" aria-labelledby="parent-title">
+            <button className="modal-close" onClick={() => setShowParent(false)}>×</button>
+            <div className="parent-modal-header"><div><p className="eyebrow">Private grown-up view</p><h2 id="parent-title">A complete view of {learner.name}&apos;s Arabic journey.</h2><p>Progress, curriculum controls, account saving, and your own content library.</p></div><div className="parent-score"><strong>{Math.round(levelPercent)}%</strong><span>level path</span></div></div>
+            <div className="parent-tabs"><button className={parentTab === "progress" ? "active" : ""} onClick={() => setParentTab("progress")}>Progress</button><button className={parentTab === "content" ? "active" : ""} onClick={() => setParentTab("content")}>Content Studio</button><button className={parentTab === "account" ? "active" : ""} onClick={() => setParentTab("account")}>Account</button></div>
+
+            {parentTab === "progress" && <>
+              <div className="parent-metrics"><div><span>{learner.xp} XP</span><small>Total learning growth</small><em>Level {activeLevel} · {activeLevelInfo.cefr}</em></div><div><span>{progress.length}</span><small>Activities remembered</small><em>{completedHomework}/5 homework tasks</em></div><div><span>{Object.values(coloringBook).filter((item) => item.length).length}</span><small>Saved artworks</small><em>{bookings.length} lesson requests</em></div></div>
+              <div className="parent-detail-grid"><section><div className="section-title-row compact"><div><p className="eyebrow">Skill balance</p><h3>Where growth is strongest</h3></div></div><div className="skill-bars">{[["Letters", trackScore("letters")], ["Words", trackScore("words")], ["Sentences", trackScore("sentences")], ["Stories", trackScore("stories")]].map((item) => <div key={String(item[0])}><span>{item[0]}</span><div><i style={{ width: `${Number(item[1]) || 6}%` }} /></div><strong>{Number(item[1]) || 0}%</strong></div>)}</div></section><section className="teacher-note"><p className="eyebrow">Adaptive recommendation</p><blockquote>“Keep the next week balanced: two sentence challenges, one story, and one creative page. The app will remember each result.”</blockquote><button className="text-button" onClick={() => { setShowParent(false); goTo("teacher"); }}>Plan a live lesson →</button></section></div>
+            </>}
+
+            {parentTab === "content" && <div className="content-studio">
+              <section><p className="eyebrow">Add to the curriculum</p><h3>Create a reusable learning item</h3><div className="content-form"><label><span>Type</span><select value={contentForm.type} onChange={(event) => setContentForm((item) => ({ ...item, type: event.target.value }))}><option value="story">Story</option><option value="sentence">Sentence</option><option value="game">Game</option><option value="coloring">Coloring prompt</option><option value="lesson">Lesson</option></select></label><label><span>Level</span><select value={contentForm.level} onChange={(event) => setContentForm((item) => ({ ...item, level: Number(event.target.value) }))}>{levels.map((level) => <option key={level.id} value={level.id}>{level.id}. {level.name}</option>)}</select></label><label className="wide"><span>English title or instruction</span><input value={contentForm.title} onChange={(event) => setContentForm((item) => ({ ...item, title: event.target.value }))} placeholder="A visit to the library" /></label><label className="wide"><span>Arabic content</span><textarea dir="rtl" className="arabic" value={contentForm.arabic} onChange={(event) => setContentForm((item) => ({ ...item, arabic: event.target.value }))} placeholder="اكتب المحتوى العربي هنا" /></label><label className="wide"><span>English support (optional)</span><input value={contentForm.english} onChange={(event) => setContentForm((item) => ({ ...item, english: event.target.value }))} placeholder="Translation, prompt, or vocabulary help" /></label><button className="primary-button" onClick={addCustomContent} disabled={!contentForm.title.trim() || !contentForm.arabic.trim()}>Add to Kalemati</button></div></section>
+              <section className="content-library"><div><p className="eyebrow">Your additions</p><h3>{customContent.length} custom items</h3></div>{customContent.length ? customContent.map((item) => <div key={item.id}><span>{item.type.slice(0, 1).toUpperCase()}</span><strong>{item.title}</strong><small>Level {item.level} · {item.type}</small><p className="arabic" dir="rtl">{item.arabic}</p></div>) : <p className="empty-state">Your stories and sentence challenges will appear here and inside the learner&apos;s matching level.</p>}</section>
+            </div>}
+
+            {parentTab === "account" && <div className="account-panel"><section><p className="eyebrow">Learner profile</p><h3>Personalise the journey</h3><label><span>Learner name</span><input value={learnerNameDraft} onChange={(event) => setLearnerNameDraft(event.target.value)} /></label><label><span>Current pathway</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>Level {level.id} · {level.name}</option>)}</select></label><button className="primary-button" onClick={updateProfile}>Save profile</button></section><section className="account-identity"><span className="account-avatar">{owner.displayName.slice(0, 1).toUpperCase()}</span><p className="eyebrow">Signed-in grown-up</p><h3>{owner.displayName}</h3><p>{owner.email || "Preview account"}</p><div className={`account-save-status ${syncState}`}><i />{syncState === "saved" ? "Progress is stored securely across sessions." : syncState === "preview" ? "Sign in on the published private site to save across devices." : "Connecting to your saved learning account."}</div>{authenticated && <a href="/signout-with-chatgpt?return_to=/">Sign out of this account</a>}</section></div>}
+          </section>
+        </div>
+      )}
     </div>
   );
 }
