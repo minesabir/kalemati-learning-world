@@ -864,7 +864,7 @@ export default function Home() {
               <p className="eyebrow">Complete Arabic pathway</p>
               <h2>Six worlds, one connected curriculum</h2>
             </div>
-            <span className="curriculum-count">170+ guided activities</span>
+            <span className="curriculum-count">190+ guided activities</span>
           </div>
           <div className="level-roadmap">
             {levels.map((level) => (
@@ -1074,7 +1074,11 @@ export default function Home() {
 
   const renderStories = () => (
     <div className="page-stack">
-      {pageHeader("Listen, read, understand", "Story Library", "Twelve levelled stories plus anything you add in Content Studio, each with vocabulary and comprehension.", "حِكَايَات")}
+      {pageHeader("Listen, read, understand", "Story Library", `${stories.length} levelled stories plus anything you add in Content Studio, each with vocabulary, narration, and comprehension.`, "حِكَايَات")}
+      <section className="story-library-summary panel">
+        <div><span className="story-stack-mark">◐</span><div><p className="eyebrow">A growing Arabic bookshelf</p><h2>{stories.length} stories across six reading worlds</h2><p>Level {activeLevel} currently opens {levelStories.length} stories for {learner.name}.</p></div></div>
+        <div className="story-level-shelves">{levels.map((level) => { const count = stories.filter((item) => item.level === level.id).length; return <button key={level.id} className={`${level.color} ${activeLevel === level.id ? "active" : ""}`} onClick={() => selectLevel(level.id)}><span>{level.id}</span><strong>{count} stories</strong><small>{level.cefr}</small></button>; })}</div>
+      </section>
       <section className="story-reader panel expanded-reader">
         <div className="story-cover"><Image src="/kalemati-world.png" alt="The paper-and-clay word portals of Kalemati" fill sizes="(max-width: 720px) 100vw, 44vw" /><span className="story-number">Level {activeLevel} · {story.minutes} min</span></div>
         <div className="story-content"><p className="eyebrow">Story {storyIndex + 1} of {levelStories.length}</p><h2>{story.title}</h2><h3 className="arabic" dir="rtl">{story.arabicTitle}</h3><p className="arabic story-text" dir="rtl">{story.text}</p><div className="vocabulary-row">{story.words.map((word) => <span key={word}>{word}</span>)}</div><div className="reader-actions"><button className="primary-button" onClick={() => speak(story.text)}>▶ Listen in Arabic</button><button className="small-button secondary" onClick={() => recordProgress(story.id, "stories", 90)}>Mark as read ✓</button></div></div>

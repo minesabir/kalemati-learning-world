@@ -57,6 +57,18 @@ test("ships levelled curriculum, persistence, and extensible content", async () 
   assert.match(curriculum, /export const sentenceExercises/);
   assert.match(curriculum, /export const coloringScenes/);
   assert.match(curriculum, /export const gameRounds/);
+  const storyBlock = curriculum.match(
+    /export const stories: Story\[\] = \[([\s\S]*?)\r?\n\];\r?\n\r?\nexport const coloringScenes/,
+  )?.[1] ?? "";
+  assert.equal((storyBlock.match(/\bid:/g) ?? []).length, 30);
+  for (let level = 1; level <= 6; level += 1) {
+    assert.equal(
+      (storyBlock.match(new RegExp(`level: ${level}`, "g")) ?? []).length,
+      5,
+    );
+  }
+  assert.match(storyBlock, /id: "blue-door"/);
+  assert.match(storyBlock, /id: "before-dawn"/);
   assert.match(page, /<canvas/);
   assert.match(page, /Content Studio/);
   assert.match(page, /renderTests/);

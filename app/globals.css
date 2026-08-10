@@ -3675,3 +3675,91 @@ canvas:focus-visible {
   .placement-map > div:nth-child(2) { grid-template-columns: 1fr 1fr; }
   .parent-metrics { grid-template-columns: 1fr; }
 }
+
+/* Expanded story shelves */
+
+.story-library-summary {
+  display: grid;
+  grid-template-columns: minmax(250px, .7fr) minmax(0, 1.3fr);
+  gap: 24px;
+  align-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 0% 100%, rgba(184,170,215,.21), transparent 30%),
+    linear-gradient(135deg, #fff9ea, #fffef9 74%);
+}
+
+.story-library-summary > div:first-child {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  gap: 15px;
+  align-items: center;
+}
+
+.story-stack-mark {
+  display: grid;
+  width: 58px;
+  height: 64px;
+  place-items: center;
+  border: 7px solid rgba(255,255,255,.72);
+  border-radius: 17px 23px 18px 14px;
+  color: #fff;
+  background: linear-gradient(145deg, var(--lavender), #7f6da1);
+  box-shadow: 0 7px 0 #71608f, 0 14px 20px rgba(87,72,117,.13), inset 4px 4px 7px rgba(255,255,255,.22);
+  font-size: 25px;
+  transform: rotate(-4deg);
+}
+
+.story-library-summary h2 { margin: 2px 0 5px; }
+.story-library-summary > div:first-child p:last-child { margin: 0; color: var(--muted); font-size: 9px; }
+
+.story-level-shelves {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+}
+
+.story-level-shelves button {
+  display: grid;
+  min-height: 78px;
+  padding: 9px;
+  place-items: center;
+  border: 1px solid #e1dacf;
+  border-radius: 15px;
+  background: #faf8f3;
+  box-shadow: 0 4px 0 rgba(66,74,65,.06);
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.story-level-shelves button.mint { background: #eaf4e9; }
+.story-level-shelves button.sun { background: #fff4d9; }
+.story-level-shelves button.coral { background: #fbe7df; }
+.story-level-shelves button.lavender { background: #eee9f6; }
+.story-level-shelves button.sky { background: #e5f3f4; }
+.story-level-shelves button.rose { background: #f7e7ec; }
+.story-level-shelves button:hover,
+.story-level-shelves button.active { border-color: var(--sage-dark); box-shadow: 0 7px 0 rgba(49,91,84,.18); transform: translateY(-3px); }
+.story-level-shelves span { display: grid; width: 25px; height: 25px; place-items: center; border-radius: 9px; color: #fff; background: var(--sage); font-size: 8px; font-weight: 800; }
+.story-level-shelves strong { margin-top: 5px; font-size: 8px; }
+.story-level-shelves small { color: var(--muted); font-size: 7px; }
+.expanded-story-list { grid-template-columns: repeat(3, 1fr); }
+
+@media (max-width: 1240px) {
+  .story-library-summary { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 980px) {
+  .story-level-shelves { grid-template-columns: repeat(3, 1fr); }
+  .expanded-story-list { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 720px) {
+  .story-library-summary > div:first-child { grid-template-columns: 48px 1fr; }
+  .story-stack-mark { width: 48px; height: 54px; border-width: 6px; font-size: 20px; }
+  .expanded-story-list { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 460px) {
+  .story-level-shelves { grid-template-columns: repeat(2, 1fr); }
+}
