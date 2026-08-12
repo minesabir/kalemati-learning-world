@@ -23,13 +23,13 @@ async function render() {
   );
 }
 
-test("server-renders the complete Kalemati learning world", async () => {
+test("server-renders the complete Kalimati learning world", async () => {
   const response = await render();
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
 
   const html = await response.text();
-  assert.match(html, /Kalemati/);
+  assert.match(html, /Kalimati/);
   assert.match(html, /Six worlds, one connected curriculum/);
   assert.match(html, /First Sounds/);
   assert.match(html, /Young Writer/);
