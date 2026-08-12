@@ -90,6 +90,14 @@ type LessonDay = {
   label: string;
 };
 
+declare const __GITHUB_PAGES__: boolean;
+
+const FULL_APP_URL =
+  "https://kalemati-learning-world.minaalbayati05.chatgpt.site/";
+const isGitHubPagesBuild =
+  typeof __GITHUB_PAGES__ !== "undefined" && __GITHUB_PAGES__;
+const PAGES_STORAGE_KEY = "kalemati-github-pages-progress-v1";
+
 const navGroups: {
   label: string;
   items: { id: ViewId; icon: string; label: string }[];
@@ -376,6 +384,7 @@ export default function Home() {
   const [customContent, setCustomContent] = useState<CustomContent[]>([]);
   const [contentForm, setContentForm] = useState({ type: "story", title: "", arabic: "", english: "", level: 1 });
   const [learnerNameDraft, setLearnerNameDraft] = useState("Layla");
+  const [pagesStorageReady, setPagesStorageReady] = useState(false);
 
   const mainRef = useRef<HTMLElement>(null);
   const achievementCloseRef = useRef<HTMLButtonElement>(null);
@@ -419,6 +428,35 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (isGitHubPagesBuild) {
+      const frame = window.requestAnimationFrame(() => {
+        try {
+          const saved = window.localStorage.getItem(PAGES_STORAGE_KEY);
+          if (saved) {
+            const data = JSON.parse(saved) as {
+              learner?: Learner;
+              progress?: ProgressItem[];
+              coloringBook?: Record<string, PaintStroke[]>;
+              customContent?: CustomContent[];
+            };
+            if (data.learner) {
+              setLearner(data.learner);
+              setLearnerNameDraft(data.learner.name);
+              setActiveLevel(data.learner.currentLevel);
+            }
+            if (data.progress) setProgress(data.progress);
+            if (data.coloringBook) setColoringBook(data.coloringBook);
+            if (data.customContent) setCustomContent(data.customContent);
+          }
+        } catch {
+          window.localStorage.removeItem(PAGES_STORAGE_KEY);
+        }
+        setSyncState("preview");
+        setPagesStorageReady(true);
+      });
+      return () => window.cancelAnimationFrame(frame);
+    }
+
     let cancelled = false;
     fetch("/api/learning")
       .then((response) => response.json())
@@ -453,6 +491,14 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isGitHubPagesBuild || !pagesStorageReady) return;
+    window.localStorage.setItem(
+      PAGES_STORAGE_KEY,
+      JSON.stringify({ learner, progress, coloringBook, customContent }),
+    );
+  }, [coloringBook, customContent, learner, pagesStorageReady, progress]);
 
   useEffect(() => {
     if (!showParent && !showAchievements) return;
@@ -1358,9 +1404,9 @@ export default function Home() {
           </div>
           <div className="time-slots">{["3:30 PM", "4:15 PM", "5:00 PM", "5:45 PM"].map((slot) => <button key={slot} className={teacherSlot === slot ? "active" : ""} aria-pressed={teacherSlot === slot} onClick={() => { setTeacherSlot(slot); setBookingConfirmed(false); }}>{slot}</button>)}</div>
           <button className="primary-button full" disabled={!teacherSlot || !selectedLessonDay} onClick={() => void requestTeacherLesson()} aria-live="polite">
-            {bookingConfirmed ? "Lesson request saved ✓" : !authenticated && teacherSlot ? `Sign in to request ${teacherSlot}` : teacherSlot ? `Request ${teacherSlot}` : "Choose a time first"}
+            {bookingConfirmed ? "Lesson request saved ✓" : isGitHubPagesBuild && teacherSlot ? `Open full app to request ${teacherSlot}` : !authenticated && teacherSlot ? `Sign in to request ${teacherSlot}` : teacherSlot ? `Request ${teacherSlot}` : "Choose a time first"}
           </button>
-          <p className="booking-note">{authenticated ? "A parent reviews the request before confirmation. No payment is taken in this prototype." : "Choose a time, then sign in so the request can be stored in the parent account."}</p>
+          <p className="booking-note">{authenticated ? "A parent reviews the request before confirmation. No payment is taken in this prototype." : isGitHubPagesBuild ? "Teacher requests and cloud accounts are available in the full Kalemati app." : "Choose a time, then sign in so the request can be stored in the parent account."}</p>
         </div>
       </section>
       {bookings.length > 0 && <section className="panel booking-history"><div><p className="eyebrow">Saved requests</p><h2>Your lesson plan</h2></div>{bookings.slice(0, 3).map((booking, index) => <div key={`${booking.lessonSlot}-${index}`}><span>☏</span><strong>{booking.teacherName}</strong><p>{booking.lessonSlot} · {booking.focus}</p><em>{booking.status}</em></div>)}</section>}
@@ -1398,11 +1444,11 @@ export default function Home() {
             <label className="level-switcher"><span>Path</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>{level.id}. {level.name} ({level.cefr})</option>)}</select></label>
             <button
               className={`save-state ${syncState}`}
-              onClick={() => { if (syncState === "preview" || syncState === "error") openAccount(); }}
-              disabled={syncState === "saved" || syncState === "saving" || syncState === "loading"}
+              onClick={() => { if (isGitHubPagesBuild || syncState === "preview" || syncState === "error") openAccount(); }}
+              disabled={!isGitHubPagesBuild && (syncState === "saved" || syncState === "saving" || syncState === "loading")}
               aria-live="polite"
             >
-              {syncState === "saved" ? "✓ Saved" : syncState === "saving" ? "Saving…" : syncState === "preview" ? "Sign in to save" : syncState === "error" ? "Save needs attention" : "Connecting…"}
+              {isGitHubPagesBuild ? "✓ Saved on device" : syncState === "saved" ? "✓ Saved" : syncState === "saving" ? "Saving…" : syncState === "preview" ? "Sign in to save" : syncState === "error" ? "Save needs attention" : "Connecting…"}
             </button>
             <button className="streak-button" onClick={() => setShowAchievements(true)}><span>✦</span>{learner.streak} day streak</button>
             <button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label={soundOn ? "Turn sound off" : "Turn sound on"}>{soundOn ? "♪" : "×"}</button>
@@ -1452,7 +1498,7 @@ export default function Home() {
               <section className="content-library"><div><p className="eyebrow">Your additions</p><h3>{customContent.length} custom items</h3></div>{customContent.length ? customContent.map((item) => <div key={item.id}><span>{item.type.slice(0, 1).toUpperCase()}</span><strong>{item.title}</strong><small>Level {item.level} · {item.type}</small><p className="arabic" dir="rtl">{item.arabic}</p></div>) : <p className="empty-state">Your stories and sentence challenges will appear here and inside the learner&apos;s matching level.</p>}</section>
             </div>}
 
-            {parentTab === "account" && <div className="account-panel"><section><p className="eyebrow">Learner profile</p><h3>Personalise the journey</h3><label><span>Learner name</span><input value={learnerNameDraft} onChange={(event) => setLearnerNameDraft(event.target.value)} /></label><label><span>Current pathway</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>Level {level.id} · {level.name}</option>)}</select></label><button className="primary-button" onClick={updateProfile}>{authenticated ? "Save profile" : "Apply for this session"}</button></section><section className="account-identity"><span className="account-avatar">{owner.displayName.slice(0, 1).toUpperCase()}</span><p className="eyebrow">{authenticated ? "Signed-in grown-up" : "Save across devices"}</p><h3>{authenticated ? owner.displayName : "Keep every learning moment"}</h3><p>{owner.email || "A parent can sign in with ChatGPT."}</p><div className={`account-save-status ${syncState}`}><i />{syncState === "saved" ? "Progress is stored securely across sessions." : syncState === "preview" ? "This preview lasts only until the page is closed. Sign in to keep progress, artwork, and lesson requests." : syncState === "error" ? "Saving needs attention. Sign in again or retry shortly." : "Connecting to your saved learning account."}</div>{authenticated ? <a href="/signout-with-chatgpt?return_to=/">Sign out of this account</a> : <a className="account-signin" href="/signin-with-chatgpt?return_to=/">Sign in with ChatGPT →</a>}</section></div>}
+            {parentTab === "account" && <div className="account-panel"><section><p className="eyebrow">Learner profile</p><h3>Personalise the journey</h3><label><span>Learner name</span><input value={learnerNameDraft} onChange={(event) => setLearnerNameDraft(event.target.value)} /></label><label><span>Current pathway</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>Level {level.id} · {level.name}</option>)}</select></label><button className="primary-button" onClick={updateProfile}>{authenticated ? "Save profile" : isGitHubPagesBuild ? "Save on this device" : "Apply for this session"}</button></section><section className="account-identity"><span className="account-avatar">{owner.displayName.slice(0, 1).toUpperCase()}</span><p className="eyebrow">{authenticated ? "Signed-in grown-up" : isGitHubPagesBuild ? "GitHub Pages edition" : "Save across devices"}</p><h3>{authenticated ? owner.displayName : isGitHubPagesBuild ? "Saved in this browser" : "Keep every learning moment"}</h3><p>{owner.email || (isGitHubPagesBuild ? "Use the full app for cloud saving and teacher requests." : "A parent can sign in with ChatGPT.")}</p><div className={`account-save-status ${syncState}`}><i />{syncState === "saved" ? "Progress is stored securely across sessions." : isGitHubPagesBuild ? "Progress, artwork, and custom content stay on this device. Open the full app to use an account across devices." : syncState === "preview" ? "This preview lasts only until the page is closed. Sign in to keep progress, artwork, and lesson requests." : syncState === "error" ? "Saving needs attention. Sign in again or retry shortly." : "Connecting to your saved learning account."}</div>{authenticated ? <a href="/signout-with-chatgpt?return_to=/">Sign out of this account</a> : <a className="account-signin" href={isGitHubPagesBuild ? FULL_APP_URL : "/signin-with-chatgpt?return_to=/"} target={isGitHubPagesBuild ? "_blank" : undefined} rel={isGitHubPagesBuild ? "noreferrer" : undefined}>{isGitHubPagesBuild ? "Open the full Kalemati app →" : "Sign in with ChatGPT →"}</a>}</section></div>}
           </section>
         </div>
       )}
