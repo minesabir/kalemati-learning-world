@@ -2104,7 +2104,7 @@ canvas:focus-visible {
 
 .date-strip {
   display: grid;
-  grid-template-columns: 30px repeat(4, 1fr) 30px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   margin-bottom: 20px;
 }
@@ -2118,11 +2118,11 @@ canvas:focus-visible {
   background: #fbfaf6;
 }
 
-.date-strip button { cursor: pointer; color: var(--sage-dark); font-size: 18px; }
-.date-strip div { align-content: center; gap: 2px; }
+.date-strip button { align-content: center; gap: 2px; cursor: pointer; color: var(--sage-dark); }
 .date-strip .active { color: white; background: var(--sage); box-shadow: 0 5px 0 var(--sage-dark); transform: translateY(-3px); }
 .date-strip small { font-size: 7px; }
 .date-strip strong { font-size: 15px; }
+.schedule-loading { grid-column: 1 / 5; color: var(--muted); font-size: 9px; }
 
 .time-slots {
   display: grid;
@@ -2300,15 +2300,17 @@ canvas:focus-visible {
 }
 
 @media (max-width: 980px) {
-  .app-shell { grid-template-columns: 82px minmax(0, 1fr); }
-  .sidebar { padding-inline: 10px; }
+  .app-shell { grid-template-columns: 96px minmax(0, 1fr); }
+  .sidebar { padding-inline: 8px; }
   .brand { justify-content: center; padding-inline: 0; }
   .brand > span:last-child,
   .nav-group > p,
   .nav-group em,
   .nav-group > button.active > i,
   .sidebar-footer > div { display: none; }
-  .nav-group > button { justify-content: center; padding: 7px; }
+  .nav-group { margin-bottom: 10px; }
+  .nav-group > button { flex-direction: column; justify-content: center; gap: 2px; padding: 5px 4px; }
+  .nav-group em { display: block; max-width: 78px; font-size: 7px; line-height: 1.05; text-align: center; white-space: normal; }
   .nav-icon { width: 34px; height: 34px; flex-basis: 34px; }
   .sidebar-footer { justify-content: center; padding: 8px; }
   .right-rail { grid-template-columns: 1fr 1fr; }
@@ -3070,6 +3072,7 @@ canvas:focus-visible {
 .save-state.saved { color: var(--sage-dark); background: #eef6ee; }
 .save-state.preview { color: #735f91; background: #f0ebf7; }
 .save-state.error { color: #9a5444; background: #fff0e9; }
+.save-state:disabled { cursor: default; }
 
 .expanded-parent-modal {
   width: min(1080px, 100%);
@@ -3185,6 +3188,17 @@ canvas:focus-visible {
 }
 .account-identity > p { margin: 2px 0; color: var(--muted); font-size: 10px; }
 .account-identity a { margin-top: 12px; color: var(--sage-dark); font-size: 9px; font-weight: 750; }
+.account-identity .account-signin {
+  display: inline-flex;
+  min-height: 38px;
+  padding: 0 14px;
+  align-items: center;
+  border-radius: 11px;
+  color: #fff;
+  background: var(--sage-dark);
+  box-shadow: 0 5px 0 #244c45;
+  text-decoration: none;
+}
 .account-save-status { display: flex; align-items: center; gap: 7px; margin-top: 15px; padding: 10px 12px; border: 1px solid #dae4d7; border-radius: 12px; color: #607068; background: rgba(255,255,255,.65); font-size: 8px; text-align: left; }
 .account-save-status i { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--sage); }
 .account-save-status.preview i { background: var(--lavender); }
@@ -3238,6 +3252,25 @@ canvas:focus-visible {
 }
 
 @media (max-width: 720px) {
+  .sidebar { height: 88px; }
+  .sidebar nav { align-items: center; }
+  .nav-group > button {
+    flex: 0 0 72px;
+    min-height: 62px;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 5px;
+  }
+  .nav-group em {
+    display: block;
+    max-width: 66px;
+    font-size: 7px;
+    line-height: 1.05;
+    text-align: center;
+    white-space: normal;
+  }
+  .nav-icon { width: 30px; height: 30px; flex-basis: 30px; font-size: 15px; }
+  .topbar { top: 88px; }
   .expanded-hero .hero-copy { width: 100%; }
   .level-roadmap { grid-template-columns: repeat(2, 1fr); }
   .level-card { min-height: 156px; }
@@ -3273,9 +3306,13 @@ canvas:focus-visible {
 }
 
 @media (max-width: 460px) {
-  .level-switcher { display: none; }
-  .expanded-topbar .streak-button { font-size: 0; }
-  .expanded-topbar .streak-button span { font-size: 14px; }
+  .modal-backdrop { padding: 10px; }
+  .expanded-topbar .top-actions { gap: 5px; }
+  .level-switcher { display: flex; width: 104px; min-height: 34px; margin-right: auto; }
+  .level-switcher span { display: none; }
+  .level-switcher select { width: 100%; max-width: 100%; font-size: 7px; }
+  .save-state { display: block; min-height: 34px; padding: 0 7px; font-size: 7px; }
+  .expanded-topbar .streak-button { display: none; }
   .level-roadmap { grid-template-columns: 1fr 1fr; gap: 8px; }
   .level-card { min-height: 147px; padding: 10px; }
   .level-card em { display: none; }
@@ -3292,7 +3329,12 @@ canvas:focus-visible {
   .art-footer > div { width: 100%; flex-direction: column; }
   .art-footer button { width: 100%; }
   .expanded-parent-modal { padding: 22px 15px; }
+  .parent-modal-header { display: grid; grid-template-columns: 1fr; gap: 12px; padding-right: 42px; }
+  .parent-modal-header h2 { font-size: 23px; line-height: 1.12; }
+  .parent-score { width: 72px; height: 72px; justify-self: start; }
   .parent-tabs button { font-size: 8px; }
+  .date-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-loading { grid-column: 1 / 3; }
 }
 
 /* Assessment portals */

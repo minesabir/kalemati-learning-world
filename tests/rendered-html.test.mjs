@@ -41,6 +41,7 @@ test("server-renders the complete Kalemati learning world", async () => {
   assert.match(html, /Dictation Lab/);
   assert.match(html, /Level Compass/);
   assert.match(html, /كَلِماتي/);
+  assert.doesNotMatch(html, /Monday, 10 August/);
   assert.doesNotMatch(html, /bird|hoopoe|mascot|duolingo/i);
 });
 
@@ -74,6 +75,12 @@ test("ships levelled curriculum, persistence, and extensible content", async () 
   assert.match(page, /renderTests/);
   assert.match(page, /renderDictation/);
   assert.match(page, /renderPlacement/);
+  assert.match(page, /requestTeacherLesson/);
+  assert.match(page, /aria-label=\{item\.label\}/);
+  assert.match(page, /lessonDays\.map/);
+  assert.match(page, /Sign in to save/);
+  assert.match(page, /Sign in with ChatGPT/);
+  assert.match(page, /This preview lasts only until the page is closed/);
   assert.match(page, /\/api\/learning/);
   assert.match(assessments, /export const assessmentQuestions/);
   assert.match(assessments, /export const dictationExercises/);

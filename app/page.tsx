@@ -83,6 +83,12 @@ type Booking = {
   focus: string;
   status: string;
 };
+type LessonDay = {
+  key: string;
+  weekday: string;
+  day: string;
+  label: string;
+};
 
 const navGroups: {
   label: string;
@@ -315,6 +321,7 @@ function normalizeArabic(value: string) {
 
 export default function Home() {
   const [view, setView] = useState<ViewId>("home");
+  const [todayLabel, setTodayLabel] = useState("Today");
   const [soundOn, setSoundOn] = useState(true);
   const [activeLevel, setActiveLevel] = useState(1);
   const [activeLetter, setActiveLetter] = useState(5);
@@ -352,6 +359,8 @@ export default function Home() {
     correct: number;
     score: number;
   } | null>(null);
+  const [lessonDays, setLessonDays] = useState<LessonDay[]>([]);
+  const [teacherDay, setTeacherDay] = useState("");
   const [teacherSlot, setTeacherSlot] = useState("");
   const [lessonFocus, setLessonFocus] = useState("Conversation confidence");
   const [bookingConfirmed, setBookingConfirmed] = useState(false);
@@ -369,10 +378,45 @@ export default function Home() {
   const [learnerNameDraft, setLearnerNameDraft] = useState("Layla");
 
   const mainRef = useRef<HTMLElement>(null);
+  const achievementCloseRef = useRef<HTMLButtonElement>(null);
+  const parentCloseRef = useRef<HTMLButtonElement>(null);
   const traceCanvasRef = useRef<HTMLCanvasElement>(null);
   const tracing = useRef(false);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
   const painting = useRef(false);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const now = new Date();
+      const fullDate = new Intl.DateTimeFormat("en-GB", {
+        weekday: "long",
+        day: "numeric",
+        month: "long",
+      });
+      const weekday = new Intl.DateTimeFormat("en-GB", { weekday: "short" });
+      const dayNumber = new Intl.DateTimeFormat("en-GB", { day: "numeric" });
+      setTodayLabel(fullDate.format(now));
+
+      const upcoming = Array.from({ length: 4 }, (_, index) => {
+        const date = new Date(now);
+        date.setDate(now.getDate() + index + 1);
+        const key = [
+          date.getFullYear(),
+          String(date.getMonth() + 1).padStart(2, "0"),
+          String(date.getDate()).padStart(2, "0"),
+        ].join("-");
+        return {
+          key,
+          weekday: weekday.format(date).toUpperCase(),
+          day: dayNumber.format(date),
+          label: fullDate.format(date),
+        };
+      });
+      setLessonDays(upcoming);
+      setTeacherDay(upcoming[0]?.key ?? "");
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -409,6 +453,23 @@ export default function Home() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!showParent && !showAchievements) return;
+    (showParent ? parentCloseRef : achievementCloseRef).current?.focus();
+    const previousOverflow = document.body.style.overflow;
+    const closeModal = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (showParent) setShowParent(false);
+      else setShowAchievements(false);
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", closeModal);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", closeModal);
+    };
+  }, [showAchievements, showParent]);
 
   useEffect(() => {
     const canvas = colorCanvasRef.current;
@@ -508,6 +569,11 @@ export default function Home() {
   const goTo = (next: ViewId) => {
     setView(next);
     mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const openAccount = () => {
+    setParentTab("account");
+    setShowParent(true);
   };
 
   const speak = (text: string) => {
@@ -784,6 +850,26 @@ export default function Home() {
     setContentForm((item) => ({ ...item, title: "", arabic: "", english: "" }));
   };
 
+  const selectedLessonDay = lessonDays.find((item) => item.key === teacherDay);
+
+  const requestTeacherLesson = async () => {
+    if (!teacherSlot || !selectedLessonDay) return;
+    if (!authenticated) {
+      setBookingConfirmed(false);
+      openAccount();
+      return;
+    }
+    const data = await postAction({
+      action: "booking",
+      teacherName: "Ms. Noor",
+      lessonSlot: `${selectedLessonDay.label} · ${teacherSlot}`,
+      focus: lessonFocus,
+    });
+    if (!data?.booking) return;
+    setBookings((items) => [data.booking, ...items]);
+    setBookingConfirmed(true);
+  };
+
   const pageHeader = (
     eyebrow: string,
     title: string,
@@ -967,7 +1053,7 @@ export default function Home() {
           <div className="achievement-top"><span className="medal">★</span><span className="new-tag">{progress.length ? "GROWING" : "START"}</span></div>
           <p className="eyebrow">Achievement collection</p>
           <h3>{progress.length >= 8 ? "Curious Pathfinder" : "First Portal Opened"}</h3>
-          <p>{progress.length} learning moments saved across the curriculum.</p>
+          <p>{authenticated ? `${progress.length} learning moments saved across the curriculum.` : `${progress.length} learning moments completed in this preview session.`}</p>
           <span className="text-link">See every keepsake →</span>
         </button>
 
@@ -1050,7 +1136,7 @@ export default function Home() {
 
   const renderSentences = () => (
     <div className="page-stack">
-      {pageHeader("A real sentence engine", "Sentence Studio", `${levelSentences.length} guided challenges at this level, with hints, grammar feedback, audio, and saved mastery.`, "جُمْلَة")}
+      {pageHeader("A real sentence engine", "Sentence Studio", `${levelSentences.length} guided challenges at this level, with hints, grammar feedback, audio, and ${authenticated ? "saved mastery" : "session progress"}.`, "جُمْلَة")}
       <section className="sentence-course-strip panel">
         <div><p className="eyebrow">Level {activeLevel} set</p><h2>{activeLevelInfo.focus[0]} in context</h2></div>
         <div className="sentence-dots">{levelSentences.map((item, index) => <button key={item.id} className={`${index === sentenceIndex % levelSentences.length ? "active" : ""} ${completedIds.has(item.id) ? "complete" : ""}`} onClick={() => { setSentenceIndex(index); setSentenceWords([]); setSentenceResult("idle"); }}>{completedIds.has(item.id) ? "✓" : index + 1}</button>)}</div>
@@ -1090,7 +1176,7 @@ export default function Home() {
 
   const renderHomework = () => (
     <div className="page-stack">
-      {pageHeader("A little, often", "Homework Nest", "A balanced weekly plan generated from the learner's current level and saved to their account.", "وَاجِبَاتِي")}
+      {pageHeader("A little, often", "Homework Nest", authenticated ? "A balanced weekly plan generated from the learner's current level and saved to their account." : "A balanced weekly plan for this session. Sign in to keep completed tasks across devices.", "وَاجِبَاتِي")}
       <section className="homework-summary panel"><div className="nest-graphic"><span>◌</span><span>◌</span><span>✦</span></div><div><p className="eyebrow">This week · Level {activeLevel}</p><h2>{completedHomework} of {weeklyTasks.length} meaningful tasks complete</h2><p>About {weeklyTasks.reduce((total, task) => total + task.minutes, 0)} calm minutes altogether</p></div><div className="ring-progress" style={{ "--percent": `${(completedHomework / weeklyTasks.length) * 100}%` } as CSSProperties}><strong>{Math.round((completedHomework / weeklyTasks.length) * 100)}%</strong></div></section>
       <section className="homework-list panel">{weeklyTasks.map((task) => <button key={task.id} className={completedIds.has(task.id) ? "complete" : ""} onClick={async () => { if (!completedIds.has(task.id)) await recordProgress(task.id, "homework", 100); else goTo(task.view); }}><span className="task-check">{completedIds.has(task.id) ? "✓" : ""}</span><span className="task-icon">{task.icon}</span><span><strong>{task.title}</strong><small>{task.detail}</small></span><em>{completedIds.has(task.id) ? "Open again" : `${task.minutes} min`}</em></button>)}</section>
       <p className="parent-tip"><span>☼</span><strong>Grown-up tip</strong> Praise effort and curiosity. A warm “I noticed how carefully you listened” builds more confidence than correcting every sound.</p>
@@ -1122,7 +1208,7 @@ export default function Home() {
         <section className="advanced-coloring panel">
           <div className="art-toolbar">
             <div className="tool-section"><p className="eyebrow">Colors</p><div className="swatches horizontal">{palette.map((shade) => <button key={shade} aria-label={`Choose ${shade}`} className={brushColor === shade && !eraserOn ? "active" : ""} style={{ background: shade }} onClick={() => { setBrushColor(shade); setEraserOn(false); }} />)}</div></div>
-            <div className="tool-section"><p className="eyebrow">Brush</p><div className="brush-sizes">{[12, 24, 42].map((size) => <button key={size} className={brushSize === size ? "active" : ""} onClick={() => { setBrushSize(size); setEraserOn(false); }}><i style={{ width: size / 2, height: size / 2 }} /></button>)}</div></div>
+            <div className="tool-section"><p className="eyebrow">Brush</p><div className="brush-sizes">{[12, 24, 42].map((size) => <button key={size} aria-label={`Use ${size} pixel brush`} aria-pressed={brushSize === size && !eraserOn} className={brushSize === size ? "active" : ""} onClick={() => { setBrushSize(size); setEraserOn(false); }}><i style={{ width: size / 2, height: size / 2 }} /></button>)}</div></div>
             <div className="tool-actions"><button className={eraserOn ? "active" : ""} onClick={() => setEraserOn((value) => !value)}>⌫ Eraser</button><button disabled={!sceneStrokes.length} onClick={undoPaint}>↶ Undo</button><button disabled={!sceneStrokes.length} onClick={() => setColoringBook((book) => ({ ...book, [selectedSceneId]: [] }))}>Clear</button></div>
           </div>
           <div className="artboard-wrap"><canvas ref={colorCanvasRef} width={1000} height={650} aria-label={`Coloring page: ${scene.title}`} onPointerDown={beginPaint} onPointerMove={movePaint} onPointerUp={() => { painting.current = false; }} onPointerCancel={() => { painting.current = false; }} onPointerLeave={() => { painting.current = false; }} /><button className="art-word-card" onClick={() => speak(scene.arabic)}><strong className="arabic" dir="rtl">{scene.arabic}</strong><span>{scene.word} · tap to hear ♪</span></button></div>
@@ -1139,7 +1225,7 @@ export default function Home() {
       <section className="game-feature panel">
         <div className="game-intro"><span className="game-badge">Round {gameIndex + 1} of {levelGames.length}</span><h2>{game.prompt}</h2><strong className="arabic target-word" dir="rtl">{game.arabic}</strong><button className="round-button" onClick={() => speak(game.spoken)}>♪</button></div>
         <div className="game-options">{game.options.map((option) => <button key={option.label} onClick={async () => { const right = option.label === game.answer; setGameResult(right ? "right" : "try"); if (right) { speak(game.spoken); await recordProgress(game.id, "games", 100); } }}><span className={option.display.length > 2 ? "arabic game-text-option" : ""}>{option.display}</span><small>{option.label}</small></button>)}</div>
-        <div className={`game-feedback ${gameResult}`}>{gameResult === "right" ? <><span>✦ Excellent — this pattern is now saved.</span><button onClick={() => { setGameIndex((index) => (index + 1) % levelGames.length); setGameResult("idle"); }}>Next round →</button></> : gameResult === "try" ? "A thoughtful try. Listen once more, then compare the choices." : "Choose the answer that fits best."}</div>
+        <div className={`game-feedback ${gameResult}`} aria-live="polite">{gameResult === "right" ? <><span>✦ Excellent — this pattern is {authenticated ? "now saved" : "complete for this session"}.</span><button onClick={() => { setGameIndex((index) => (index + 1) % levelGames.length); setGameResult("idle"); }}>Next round →</button></> : gameResult === "try" ? "A thoughtful try. Listen once more, then compare the choices." : "Choose the answer that fits best."}</div>
       </section>
       <section className="mini-game-grid">{[["Sound Safari", "Hear, compare, and identify Arabic sounds", "◉", "letters", "mint"], ["Word Constellations", "Connect words by theme and meaning", "✦", "words", "sun"], ["Sentence Steps", "Build increasingly rich Arabic sentences", "≋", "sentences", "lavender"], ["Story Detective", "Find clues inside narrated stories", "◐", "stories", "coral"], ["Speed Copy", "Strengthen letter memory through movement", "✎", "copybook", "sky"], ["Creative Color", "Learn vocabulary while making art", "✿", "coloring", "rose"]].map((item) => <button key={item[0]} className={`mini-game ${item[4]}`} onClick={() => goTo(item[3] as ViewId)}><span>{item[2]}</span><div><h3>{item[0]}</h3><p>{item[1]}</p><small>Open activity →</small></div></button>)}</section>
     </div>
@@ -1149,7 +1235,7 @@ export default function Home() {
     const selectedAnswer = testAnswers[testQuestion.id];
     return (
       <div className="page-stack">
-        {pageHeader("Understand what has grown", "Test Centre", "A four-part checkpoint for the current level. Results are saved without timers, pressure, or penalties.", "اِخْتِبَار")}
+        {pageHeader("Understand what has grown", "Test Centre", authenticated ? "A four-part checkpoint for the current level. Results are saved without timers, pressure, or penalties." : "A four-part checkpoint for the current level. Sign in to keep results across devices.", "اِخْتِبَار")}
         <section className="assessment-overview panel">
           <div><p className="eyebrow">Level {activeLevel} checkpoint</p><h2>Four skills · one gentle picture</h2><p>Each question checks a different part of the learning journey.</p></div>
           <div className="assessment-skill-cards">
@@ -1176,7 +1262,7 @@ export default function Home() {
         </> : <>
           <section className={`test-result panel ${testScore >= 75 ? "strong" : "growing"}`}>
             <div className="result-orbit" style={{ "--score": `${testScore}%` } as CSSProperties}><strong>{testScore}%</strong><span>checkpoint</span></div>
-            <div><p className="eyebrow">Level {activeLevel} result saved</p><h2>{testScore >= 75 ? "This pathway feels well matched." : "A little more practice will make this level feel lighter."}</h2><p>{testCorrect} of {levelTests.length} answers were correct. The result is a guide, never a label.</p><div className="result-actions"><button className="small-button secondary" onClick={restartLevelTest}>Try again</button><button className="primary-button" onClick={() => goTo(testScore >= 75 ? "dictation" : activeLevel <= 2 ? "words" : "sentences")}>{testScore >= 75 ? "Continue to dictation →" : "Practise this level →"}</button></div></div>
+            <div><p className="eyebrow">Level {activeLevel} result {authenticated ? "saved" : "ready"}</p><h2>{testScore >= 75 ? "This pathway feels well matched." : "A little more practice will make this level feel lighter."}</h2><p>{testCorrect} of {levelTests.length} answers were correct. The result is a guide, never a label.</p><div className="result-actions"><button className="small-button secondary" onClick={restartLevelTest}>Try again</button><button className="primary-button" onClick={() => goTo(testScore >= 75 ? "dictation" : activeLevel <= 2 ? "words" : "sentences")}>{testScore >= 75 ? "Continue to dictation →" : "Practise this level →"}</button></div></div>
           </section>
           <section className="answer-review panel"><div><p className="eyebrow">Answer map</p><h2>See the pattern, not just the score</h2></div>{levelTests.map((question, index) => { const right = testAnswers[question.id] === question.answer; return <div key={question.id} className={right ? "right" : "try"}><span>{right ? "✓" : index + 1}</span><div><strong>{question.skill}</strong><p>{question.insight}</p></div><em>{right ? "Mastered" : "Review"}</em></div>; })}</section>
         </>}
@@ -1239,7 +1325,43 @@ export default function Home() {
       {pageHeader("Human guidance, exactly when useful", "Meet a Teacher", "Request a focused live lesson, choose the learning goal, and keep the request in the parent account.", "مُعَلِّمَتِي")}
       <section className="teacher-layout">
         <div className="teacher-card panel"><div className="teacher-avatar" /><div className="teacher-live">Available this week</div><div className="teacher-info"><p className="eyebrow">Recommended for Level {activeLevel}</p><h2>Ms. Noor</h2><p className="arabic" dir="rtl">الْمُعَلِّمَةُ نُور</p><p>Children&apos;s Arabic specialist · 8 years teaching · English & Arabic</p><div className="teacher-tags"><span>Patient pace</span><span>Story-led</span><span>Beginner to B2</span></div><blockquote>“We will build from what your learner already knows and turn it into confident communication.”</blockquote></div></div>
-        <div className="booking-card panel"><p className="eyebrow">25-minute live lesson request</p><h2>Choose a focus and time</h2><label className="focus-select"><span>Lesson focus</span><select value={lessonFocus} onChange={(event) => setLessonFocus(event.target.value)}><option>Conversation confidence</option><option>Letter pronunciation</option><option>Sentence building</option><option>Reading comprehension</option><option>Writing feedback</option></select></label><div className="date-strip"><button>‹</button><div><small>TUE</small><strong>11</strong></div><div className="active"><small>WED</small><strong>12</strong></div><div><small>THU</small><strong>13</strong></div><div><small>FRI</small><strong>14</strong></div><button>›</button></div><div className="time-slots">{["3:30 PM", "4:15 PM", "5:00 PM", "5:45 PM"].map((slot) => <button key={slot} className={teacherSlot === slot ? "active" : ""} onClick={() => { setTeacherSlot(slot); setBookingConfirmed(false); }}>{slot}</button>)}</div><button className="primary-button full" disabled={!teacherSlot} onClick={async () => { const data = await postAction({ action: "booking", teacherName: "Ms. Noor", lessonSlot: `Wednesday 12 August · ${teacherSlot}`, focus: lessonFocus }); if (data?.booking) setBookings((items) => [data.booking, ...items]); setBookingConfirmed(true); }}>{bookingConfirmed ? "Lesson request saved ✓" : teacherSlot ? `Request ${teacherSlot}` : "Choose a time first"}</button><p className="booking-note">A parent reviews the request before confirmation. No payment is taken in this prototype.</p></div>
+        <div className="booking-card panel">
+          <p className="eyebrow">25-minute live lesson request</p>
+          <h2>Choose a focus and time</h2>
+          <label className="focus-select">
+            <span>Lesson focus</span>
+            <select value={lessonFocus} onChange={(event) => setLessonFocus(event.target.value)}>
+              <option>Conversation confidence</option>
+              <option>Letter pronunciation</option>
+              <option>Sentence building</option>
+              <option>Reading comprehension</option>
+              <option>Writing feedback</option>
+            </select>
+          </label>
+          <div className="date-strip" aria-label="Available lesson days">
+            {lessonDays.length ? lessonDays.map((day) => (
+              <button
+                key={day.key}
+                className={teacherDay === day.key ? "active" : ""}
+                aria-pressed={teacherDay === day.key}
+                aria-label={day.label}
+                onClick={() => {
+                  setTeacherDay(day.key);
+                  setTeacherSlot("");
+                  setBookingConfirmed(false);
+                }}
+              >
+                <small>{day.weekday}</small>
+                <strong>{day.day}</strong>
+              </button>
+            )) : <span className="schedule-loading">Preparing available days…</span>}
+          </div>
+          <div className="time-slots">{["3:30 PM", "4:15 PM", "5:00 PM", "5:45 PM"].map((slot) => <button key={slot} className={teacherSlot === slot ? "active" : ""} aria-pressed={teacherSlot === slot} onClick={() => { setTeacherSlot(slot); setBookingConfirmed(false); }}>{slot}</button>)}</div>
+          <button className="primary-button full" disabled={!teacherSlot || !selectedLessonDay} onClick={() => void requestTeacherLesson()} aria-live="polite">
+            {bookingConfirmed ? "Lesson request saved ✓" : !authenticated && teacherSlot ? `Sign in to request ${teacherSlot}` : teacherSlot ? `Request ${teacherSlot}` : "Choose a time first"}
+          </button>
+          <p className="booking-note">{authenticated ? "A parent reviews the request before confirmation. No payment is taken in this prototype." : "Choose a time, then sign in so the request can be stored in the parent account."}</p>
+        </div>
       </section>
       {bookings.length > 0 && <section className="panel booking-history"><div><p className="eyebrow">Saved requests</p><h2>Your lesson plan</h2></div>{bookings.slice(0, 3).map((booking, index) => <div key={`${booking.lessonSlot}-${index}`}><span>☏</span><strong>{booking.teacherName}</strong><p>{booking.lessonSlot} · {booking.focus}</p><em>{booking.status}</em></div>)}</section>}
     </div>
@@ -1265,16 +1387,23 @@ export default function Home() {
     <div className="app-shell">
       <aside className="sidebar">
         <button className="brand" onClick={() => goTo("home")} aria-label="Kalemati home"><span className="brand-cube arabic">ك</span><span><strong>Kalemati</strong><small className="arabic" dir="rtl">كَلِماتي</small></span></button>
-        <nav aria-label="Main navigation">{navGroups.map((group) => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map((item) => <button key={item.id} className={view === item.id ? "active" : ""} onClick={() => goTo(item.id)}><span className={`nav-icon ${item.id === "letters" ? "arabic" : ""}`}>{item.icon}</span><em>{item.label}</em>{view === item.id && <i />}</button>)}</div>)}</nav>
+        <nav aria-label="Main navigation">{navGroups.map((group) => <div className="nav-group" key={group.label}><p>{group.label}</p>{group.items.map((item) => <button key={item.id} aria-label={item.label} title={item.label} className={view === item.id ? "active" : ""} onClick={() => goTo(item.id)}><span className={`nav-icon ${item.id === "letters" ? "arabic" : ""}`}>{item.icon}</span><em>{item.label}</em>{view === item.id && <i />}</button>)}</div>)}</nav>
         <div className="sidebar-footer"><span className="helper-dot">✦</span><div><strong>Level {activeLevel} · {activeLevelInfo.cefr}</strong><button onClick={() => setShowParent(true)}>Parent controls →</button></div></div>
       </aside>
 
       <main ref={mainRef}>
         <header className="topbar expanded-topbar">
-          <div><span className="today-dot" /><span>{view === "home" ? "Monday, 10 August" : navGroups.flatMap((group) => group.items).find((item) => item.id === view)?.label}</span></div>
+          <div><span className="today-dot" /><span>{view === "home" ? todayLabel : navGroups.flatMap((group) => group.items).find((item) => item.id === view)?.label}</span></div>
           <div className="top-actions">
             <label className="level-switcher"><span>Path</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>{level.id}. {level.name} ({level.cefr})</option>)}</select></label>
-            <button className={`save-state ${syncState}`}>{syncState === "saved" ? "✓ Saved" : syncState === "saving" ? "Saving…" : syncState === "preview" ? "Preview" : syncState === "error" ? "Retry save" : "Connecting…"}</button>
+            <button
+              className={`save-state ${syncState}`}
+              onClick={() => { if (syncState === "preview" || syncState === "error") openAccount(); }}
+              disabled={syncState === "saved" || syncState === "saving" || syncState === "loading"}
+              aria-live="polite"
+            >
+              {syncState === "saved" ? "✓ Saved" : syncState === "saving" ? "Saving…" : syncState === "preview" ? "Sign in to save" : syncState === "error" ? "Save needs attention" : "Connecting…"}
+            </button>
             <button className="streak-button" onClick={() => setShowAchievements(true)}><span>✦</span>{learner.streak} day streak</button>
             <button className="icon-button" onClick={() => setSoundOn((value) => !value)} aria-label={soundOn ? "Turn sound off" : "Turn sound on"}>{soundOn ? "♪" : "×"}</button>
             <button className="parent-button" onClick={() => setShowParent(true)}><span>♧</span> Parent Space</button>
@@ -1287,7 +1416,7 @@ export default function Home() {
       {showAchievements && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowAchievements(false); }}>
           <section className="modal-card achievement-modal" role="dialog" aria-modal="true" aria-labelledby="achievement-title">
-            <button className="modal-close" onClick={() => setShowAchievements(false)}>×</button>
+            <button ref={achievementCloseRef} className="modal-close" aria-label="Close achievements" onClick={() => setShowAchievements(false)}>×</button>
             <p className="eyebrow">{learner.name}&apos;s keepsake shelf</p>
             <h2 id="achievement-title">Every kind of growth deserves a place.</h2>
             <div className="badge-shelf">{[
@@ -1309,7 +1438,7 @@ export default function Home() {
       {showParent && (
         <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowParent(false); }}>
           <section className="modal-card parent-modal expanded-parent-modal" role="dialog" aria-modal="true" aria-labelledby="parent-title">
-            <button className="modal-close" onClick={() => setShowParent(false)}>×</button>
+            <button ref={parentCloseRef} className="modal-close" aria-label="Close Parent Space" onClick={() => setShowParent(false)}>×</button>
             <div className="parent-modal-header"><div><p className="eyebrow">Private grown-up view</p><h2 id="parent-title">A complete view of {learner.name}&apos;s Arabic journey.</h2><p>Progress, curriculum controls, account saving, and your own content library.</p></div><div className="parent-score"><strong>{Math.round(levelPercent)}%</strong><span>level path</span></div></div>
             <div className="parent-tabs"><button className={parentTab === "progress" ? "active" : ""} onClick={() => setParentTab("progress")}>Progress</button><button className={parentTab === "content" ? "active" : ""} onClick={() => setParentTab("content")}>Content Studio</button><button className={parentTab === "account" ? "active" : ""} onClick={() => setParentTab("account")}>Account</button></div>
 
@@ -1323,7 +1452,7 @@ export default function Home() {
               <section className="content-library"><div><p className="eyebrow">Your additions</p><h3>{customContent.length} custom items</h3></div>{customContent.length ? customContent.map((item) => <div key={item.id}><span>{item.type.slice(0, 1).toUpperCase()}</span><strong>{item.title}</strong><small>Level {item.level} · {item.type}</small><p className="arabic" dir="rtl">{item.arabic}</p></div>) : <p className="empty-state">Your stories and sentence challenges will appear here and inside the learner&apos;s matching level.</p>}</section>
             </div>}
 
-            {parentTab === "account" && <div className="account-panel"><section><p className="eyebrow">Learner profile</p><h3>Personalise the journey</h3><label><span>Learner name</span><input value={learnerNameDraft} onChange={(event) => setLearnerNameDraft(event.target.value)} /></label><label><span>Current pathway</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>Level {level.id} · {level.name}</option>)}</select></label><button className="primary-button" onClick={updateProfile}>Save profile</button></section><section className="account-identity"><span className="account-avatar">{owner.displayName.slice(0, 1).toUpperCase()}</span><p className="eyebrow">Signed-in grown-up</p><h3>{owner.displayName}</h3><p>{owner.email || "Preview account"}</p><div className={`account-save-status ${syncState}`}><i />{syncState === "saved" ? "Progress is stored securely across sessions." : syncState === "preview" ? "Sign in on the published private site to save across devices." : "Connecting to your saved learning account."}</div>{authenticated && <a href="/signout-with-chatgpt?return_to=/">Sign out of this account</a>}</section></div>}
+            {parentTab === "account" && <div className="account-panel"><section><p className="eyebrow">Learner profile</p><h3>Personalise the journey</h3><label><span>Learner name</span><input value={learnerNameDraft} onChange={(event) => setLearnerNameDraft(event.target.value)} /></label><label><span>Current pathway</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>Level {level.id} · {level.name}</option>)}</select></label><button className="primary-button" onClick={updateProfile}>{authenticated ? "Save profile" : "Apply for this session"}</button></section><section className="account-identity"><span className="account-avatar">{owner.displayName.slice(0, 1).toUpperCase()}</span><p className="eyebrow">{authenticated ? "Signed-in grown-up" : "Save across devices"}</p><h3>{authenticated ? owner.displayName : "Keep every learning moment"}</h3><p>{owner.email || "A parent can sign in with ChatGPT."}</p><div className={`account-save-status ${syncState}`}><i />{syncState === "saved" ? "Progress is stored securely across sessions." : syncState === "preview" ? "This preview lasts only until the page is closed. Sign in to keep progress, artwork, and lesson requests." : syncState === "error" ? "Saving needs attention. Sign in again or retry shortly." : "Connecting to your saved learning account."}</div>{authenticated ? <a href="/signout-with-chatgpt?return_to=/">Sign out of this account</a> : <a className="account-signin" href="/signin-with-chatgpt?return_to=/">Sign in with ChatGPT →</a>}</section></div>}
           </section>
         </div>
       )}
