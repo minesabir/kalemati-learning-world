@@ -1,4 +1,4 @@
-name: Deploy Kalemati to GitHub Pages
+name: Deploy Kalimati to GitHub Pages
 
 on:
   push:
