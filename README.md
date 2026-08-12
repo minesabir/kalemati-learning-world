@@ -8,6 +8,14 @@ Kalemati is a playful 3D-inspired Arabic learning world for children and non-Ara
 
 [Open Kalemati](https://kalemati-learning-world.minaalbayati05.chatgpt.site/)
 
+## GitHub Pages edition
+
+[Open Kalemati on GitHub Pages](https://minesabir.github.io/kalemati-learning-world/)
+
+The GitHub Pages edition keeps learning progress and artwork in the current
+browser. Cloud accounts, cross-device saving, and teacher requests remain
+available in the full application above.
+
 ## Learning experience
 
 - Progressive Arabic levels for letters, words, simple sentences, reading, and comprehension
