@@ -1,16 +1,16 @@
-# Kalemati | كلماتي
+# Kalimati | كلماتي
 
-Kalemati is a playful 3D-inspired Arabic learning world for children and non-Arabic-speaking beginners. The surrounding interface is in English, while the learning curriculum and spoken content are in Arabic.
+Kalimati is a playful 3D-inspired Arabic learning world for children and non-Arabic-speaking beginners. The surrounding interface is in English, while the learning curriculum and spoken content are in Arabic.
 
-![Kalemati learning world](public/kalemati-world.png)
+![Kalimati learning world](public/kalemati-world.png)
 
 ## Live application
 
-[Open Kalemati](https://kalemati-learning-world.minaalbayati05.chatgpt.site/)
+[Open Kalimati](https://kalemati-learning-world.minaalbayati05.chatgpt.site/)
 
 ## GitHub Pages edition
 
-[Open Kalemati on GitHub Pages](https://minesabir.github.io/kalemati-learning-world/)
+[Open Kalimati on GitHub Pages](https://minesabir.github.io/kalemati-learning-world/)
 
 The GitHub Pages edition keeps learning progress and artwork in the current
 browser. Cloud accounts, cross-device saving, and teacher requests remain
