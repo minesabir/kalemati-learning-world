@@ -18,7 +18,7 @@ export async function generateMetadata(): Promise<Metadata> {
     requestHeaders.get("x-forwarded-proto") ??
     (host.includes("localhost") ? "http" : "https");
   const origin = `${protocol}://${host}`;
-  const title = "Kalemati — A world of Arabic made for curious minds";
+  const title = "Kalimati";
   const description =
     "A joyful, story-led Arabic learning world for children and non-Arabic-speaking beginners.";
 
@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      siteName: "Kalemati",
+      siteName: "Kalimati",
       type: "website",
       url: origin,
       images: [
@@ -37,7 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: `${origin}/og.png`,
           width: 1200,
           height: 630,
-          alt: "Kalemati — Arabic grows here",
+          alt: "Kalimati",
         },
       ],
     },
