@@ -614,7 +614,11 @@ export default function Home() {
 
   const goTo = (next: ViewId) => {
     setView(next);
-    mainRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    const behavior: ScrollBehavior = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth";
+    mainRef.current?.scrollTo({ top: 0, behavior });
+    window.scrollTo({ top: 0, behavior });
   };
 
   const openAccount = () => {
