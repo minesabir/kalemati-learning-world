@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import type { ChatGPTUser } from "../app/chatgpt-auth";
 import { getDb } from ".";
 import { learners, users } from "./schema";
@@ -25,6 +25,7 @@ export async function ensureLearner(user: ChatGPTUser) {
     .select()
     .from(learners)
     .where(eq(learners.ownerUserId, user.userId))
+    .orderBy(asc(learners.createdAt), asc(learners.id))
     .limit(1);
 
   if (existing) return existing;

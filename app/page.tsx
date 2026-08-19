@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import {
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -83,6 +84,28 @@ type Booking = {
   focus: string;
   status: string;
 };
+type LearnerWorkspace = {
+  learner: Learner;
+  progress: ProgressItem[];
+  coloringBook: Record<string, PaintStroke[]>;
+  bookings: Booking[];
+};
+type PagesStorage = {
+  version: 2;
+  activeLearnerId: number;
+  learners: Learner[];
+  workspaces: Record<string, LearnerWorkspace>;
+  customContent: CustomContent[];
+};
+type LearningPayload = {
+  learner: Learner;
+  learners?: Learner[];
+  progress?: ProgressItem[];
+  coloringBook?: Record<string, PaintStroke[]>;
+  artworks?: { sceneId: string; strokesJson: string }[];
+  bookings?: Booking[];
+  customContent?: CustomContent[];
+};
 type LessonDay = {
   key: string;
   weekday: string;
@@ -97,6 +120,15 @@ const FULL_APP_URL =
 const isGitHubPagesBuild =
   typeof __GITHUB_PAGES__ !== "undefined" && __GITHUB_PAGES__;
 const PAGES_STORAGE_KEY = "kalemati-github-pages-progress-v1";
+const ageBands = ["4–5", "6–8", "9–12", "13+"];
+const defaultLearner: Learner = {
+  id: 1,
+  name: "Layla",
+  ageBand: "6–8",
+  currentLevel: 1,
+  xp: 80,
+  streak: 7,
+};
 
 const navGroups: {
   label: string;
@@ -378,12 +410,16 @@ export default function Home() {
   const [authenticated, setAuthenticated] = useState(false);
   const [syncState, setSyncState] = useState<SyncState>("loading");
   const [owner, setOwner] = useState({ displayName: "Parent", email: "" });
-  const [learner, setLearner] = useState<Learner>({ name: "Layla", ageBand: "6–8", currentLevel: 1, xp: 80, streak: 7 });
+  const [learner, setLearner] = useState<Learner>(defaultLearner);
+  const [learnerProfiles, setLearnerProfiles] = useState<Learner[]>([defaultLearner]);
+  const [switchingLearner, setSwitchingLearner] = useState(false);
   const [progress, setProgress] = useState<ProgressItem[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [customContent, setCustomContent] = useState<CustomContent[]>([]);
   const [contentForm, setContentForm] = useState({ type: "story", title: "", arabic: "", english: "", level: 1 });
   const [learnerNameDraft, setLearnerNameDraft] = useState("Layla");
+  const [learnerAgeDraft, setLearnerAgeDraft] = useState("6–8");
+  const [newLearnerForm, setNewLearnerForm] = useState({ name: "", ageBand: "6–8", currentLevel: 1 });
   const [pagesStorageReady, setPagesStorageReady] = useState(false);
 
   const mainRef = useRef<HTMLElement>(null);
@@ -393,6 +429,30 @@ export default function Home() {
   const tracing = useRef(false);
   const colorCanvasRef = useRef<HTMLCanvasElement>(null);
   const painting = useRef(false);
+
+  const applyLearningData = useCallback((data: LearningPayload) => {
+    setLearner(data.learner);
+    setLearnerNameDraft(data.learner.name);
+    setLearnerAgeDraft(data.learner.ageBand);
+    setActiveLevel(data.learner.currentLevel);
+    if (data.learners?.length) setLearnerProfiles(data.learners);
+    if (data.progress) setProgress(data.progress);
+    if (data.bookings) setBookings(data.bookings);
+    if (data.customContent) setCustomContent(data.customContent);
+    if (data.coloringBook) {
+      setColoringBook(data.coloringBook);
+    } else if (data.artworks) {
+      const restored: Record<string, PaintStroke[]> = {};
+      data.artworks.forEach((artwork) => {
+        try {
+          restored[artwork.sceneId] = JSON.parse(artwork.strokesJson);
+        } catch {
+          restored[artwork.sceneId] = [];
+        }
+      });
+      setColoringBook(restored);
+    }
+  }, []);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -433,20 +493,47 @@ export default function Home() {
         try {
           const saved = window.localStorage.getItem(PAGES_STORAGE_KEY);
           if (saved) {
-            const data = JSON.parse(saved) as {
+            const data = JSON.parse(saved) as Partial<PagesStorage> & {
               learner?: Learner;
               progress?: ProgressItem[];
               coloringBook?: Record<string, PaintStroke[]>;
+              bookings?: Booking[];
               customContent?: CustomContent[];
             };
-            if (data.learner) {
-              setLearner(data.learner);
-              setLearnerNameDraft(data.learner.name);
-              setActiveLevel(data.learner.currentLevel);
+            if (
+              data.version === 2 &&
+              data.learners?.length &&
+              data.workspaces
+            ) {
+              const activeId = data.activeLearnerId ?? data.learners[0].id ?? 1;
+              const selectedProfile =
+                data.learners.find((item) => item.id === activeId) ?? data.learners[0];
+              const workspace = data.workspaces[String(activeId)] ?? {
+                learner: selectedProfile,
+                progress: [],
+                coloringBook: {},
+                bookings: [],
+              };
+              applyLearningData({
+                ...workspace,
+                learners: data.learners,
+                customContent: data.customContent ?? [],
+              });
+            } else {
+              const legacyLearner: Learner = {
+                ...defaultLearner,
+                ...data.learner,
+                id: data.learner?.id ?? 1,
+              };
+              applyLearningData({
+                learner: legacyLearner,
+                learners: [legacyLearner],
+                progress: data.progress ?? [],
+                coloringBook: data.coloringBook ?? {},
+                bookings: data.bookings ?? [],
+                customContent: data.customContent ?? [],
+              });
             }
-            if (data.progress) setProgress(data.progress);
-            if (data.coloringBook) setColoringBook(data.coloringBook);
-            if (data.customContent) setCustomContent(data.customContent);
           }
         } catch {
           window.localStorage.removeItem(PAGES_STORAGE_KEY);
@@ -467,38 +554,47 @@ export default function Home() {
         }
         setAuthenticated(true);
         setOwner(data.owner);
-        setLearner(data.learner);
-        setLearnerNameDraft(data.learner.name);
-        setActiveLevel(data.learner.currentLevel);
-        setProgress(data.progress ?? []);
-        setBookings(data.bookings ?? []);
-        setCustomContent(data.customContent ?? []);
-        const restored: Record<string, PaintStroke[]> = {};
-        (data.artworks ?? []).forEach(
-          (artwork: { sceneId: string; strokesJson: string }) => {
-            try {
-              restored[artwork.sceneId] = JSON.parse(artwork.strokesJson);
-            } catch {
-              restored[artwork.sceneId] = [];
-            }
-          },
-        );
-        setColoringBook(restored);
+        applyLearningData({
+          ...data,
+          progress: data.progress ?? [],
+          bookings: data.bookings ?? [],
+          customContent: data.customContent ?? [],
+          artworks: data.artworks ?? [],
+        });
         setSyncState("saved");
       })
       .catch(() => setSyncState("preview"));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [applyLearningData]);
 
   useEffect(() => {
     if (!isGitHubPagesBuild || !pagesStorageReady) return;
-    window.localStorage.setItem(
-      PAGES_STORAGE_KEY,
-      JSON.stringify({ learner, progress, coloringBook, customContent }),
-    );
-  }, [coloringBook, customContent, learner, pagesStorageReady, progress]);
+    const currentId = learner.id ?? 1;
+    let existing: Partial<PagesStorage> = {};
+    try {
+      existing = JSON.parse(
+        window.localStorage.getItem(PAGES_STORAGE_KEY) ?? "{}",
+      ) as Partial<PagesStorage>;
+    } catch {
+      existing = {};
+    }
+    const profiles = learnerProfiles.some((item) => item.id === currentId)
+      ? learnerProfiles.map((item) => (item.id === currentId ? learner : item))
+      : [...learnerProfiles, learner];
+    const next: PagesStorage = {
+      version: 2,
+      activeLearnerId: currentId,
+      learners: profiles,
+      workspaces: {
+        ...(existing.version === 2 ? existing.workspaces : {}),
+        [String(currentId)]: { learner, progress, coloringBook, bookings },
+      },
+      customContent,
+    };
+    window.localStorage.setItem(PAGES_STORAGE_KEY, JSON.stringify(next));
+  }, [bookings, coloringBook, customContent, learner, learnerProfiles, pagesStorageReady, progress]);
 
   useEffect(() => {
     if (!showParent && !showAchievements) return;
@@ -554,7 +650,7 @@ export default function Home() {
       const response = await fetch("/api/learning", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, learnerId: learner.id }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Could not save");
@@ -563,6 +659,154 @@ export default function Home() {
     } catch {
       setSyncState("error");
       return null;
+    }
+  };
+
+  const resetLearnerActivities = () => {
+    setSentenceIndex(0);
+    setSentenceWords([]);
+    setSentenceResult("idle");
+    setStoryIndex(0);
+    setStoryAnswer("");
+    setGameIndex(0);
+    setGameResult("idle");
+    setTestIndex(0);
+    setTestAnswers({});
+    setTestFinished(false);
+    setDictationIndex(0);
+    setDictationInput("");
+    setDictationResult("idle");
+    setShowDictationHint(false);
+    setPlacementStarted(false);
+    setPlacementIndex(0);
+    setPlacementAnswers({});
+    setPlacementResult(null);
+    setBuiltLetters([]);
+    setWordResult("idle");
+  };
+
+  const switchLearner = async (learnerId: number) => {
+    if (learnerId === learner.id || switchingLearner) return;
+    setSwitchingLearner(true);
+    resetLearnerActivities();
+    try {
+      if (isGitHubPagesBuild) {
+        const saved = JSON.parse(
+          window.localStorage.getItem(PAGES_STORAGE_KEY) ?? "{}",
+        ) as Partial<PagesStorage>;
+        const currentId = learner.id ?? 1;
+        const profiles = learnerProfiles.map((item) =>
+          item.id === currentId ? learner : item,
+        );
+        const workspaces = {
+          ...(saved.version === 2 ? saved.workspaces : {}),
+          [String(currentId)]: { learner, progress, coloringBook, bookings },
+        };
+        const selectedProfile = profiles.find((item) => item.id === learnerId);
+        if (!selectedProfile) return;
+        const workspace = workspaces[String(learnerId)] ?? {
+          learner: selectedProfile,
+          progress: [],
+          coloringBook: {},
+          bookings: [],
+        };
+        window.localStorage.setItem(
+          PAGES_STORAGE_KEY,
+          JSON.stringify({
+            version: 2,
+            activeLearnerId: learnerId,
+            learners: profiles,
+            workspaces,
+            customContent,
+          } satisfies PagesStorage),
+        );
+        applyLearningData({ ...workspace, learners: profiles });
+        setSyncState("preview");
+        return;
+      }
+
+      const response = await fetch(`/api/learning?learnerId=${learnerId}`);
+      const data = await response.json();
+      if (!response.ok || !data.authenticated) {
+        throw new Error(data.error || "Could not open learner profile");
+      }
+      applyLearningData({
+        ...data,
+        progress: data.progress ?? [],
+        bookings: data.bookings ?? [],
+        customContent: data.customContent ?? [],
+        artworks: data.artworks ?? [],
+      });
+      setSyncState("saved");
+    } catch {
+      setSyncState("error");
+    } finally {
+      setSwitchingLearner(false);
+    }
+  };
+
+  const createLearner = async () => {
+    const name = newLearnerForm.name.trim();
+    if (!name || learnerProfiles.length >= 6 || switchingLearner) return;
+    setSwitchingLearner(true);
+    resetLearnerActivities();
+    try {
+      if (isGitHubPagesBuild) {
+        const created: Learner = {
+          id: Date.now(),
+          name,
+          ageBand: newLearnerForm.ageBand,
+          currentLevel: newLearnerForm.currentLevel,
+          xp: 0,
+          streak: 1,
+        };
+        const saved = JSON.parse(
+          window.localStorage.getItem(PAGES_STORAGE_KEY) ?? "{}",
+        ) as Partial<PagesStorage>;
+        const currentId = learner.id ?? 1;
+        const profiles = [...learnerProfiles, created];
+        const workspaces = {
+          ...(saved.version === 2 ? saved.workspaces : {}),
+          [String(currentId)]: { learner, progress, coloringBook, bookings },
+          [String(created.id)]: {
+            learner: created,
+            progress: [],
+            coloringBook: {},
+            bookings: [],
+          },
+        };
+        window.localStorage.setItem(
+          PAGES_STORAGE_KEY,
+          JSON.stringify({
+            version: 2,
+            activeLearnerId: created.id!,
+            learners: profiles,
+            workspaces,
+            customContent,
+          } satisfies PagesStorage),
+        );
+        applyLearningData({
+          learner: created,
+          learners: profiles,
+          progress: [],
+          coloringBook: {},
+          bookings: [],
+        });
+        setSyncState("preview");
+      } else {
+        const data = await postAction({ action: "learner-create", ...newLearnerForm, name });
+        if (!data?.learner) return;
+        applyLearningData({
+          learner: data.learner,
+          learners: data.learners,
+          progress: [],
+          coloringBook: {},
+          bookings: [],
+        });
+      }
+      setNewLearnerForm({ name: "", ageBand: "6–8", currentLevel: 1 });
+    } finally {
+      setSwitchingLearner(false);
     }
   };
 
@@ -583,10 +827,22 @@ export default function Home() {
       return [...items, { itemId, track, score, status: "completed" }];
     });
     if (!authenticated) {
-      setLearner((item) => ({ ...item, xp: item.xp + Math.max(5, Math.round(score / 5)) }));
+      const nextLearner = {
+        ...learner,
+        xp: learner.xp + Math.max(5, Math.round(score / 5)),
+      };
+      setLearner(nextLearner);
+      setLearnerProfiles((items) =>
+        items.map((item) => (item.id === nextLearner.id ? nextLearner : item)),
+      );
     }
     const data = await postAction({ action: "progress", itemId, track, status: "completed", score });
-    if (data?.learner) setLearner(data.learner);
+    if (data?.learner) {
+      setLearner(data.learner);
+      setLearnerProfiles((items) =>
+        items.map((item) => (item.id === data.learner.id ? data.learner : item)),
+      );
+    }
   };
 
   const selectLevel = async (level: number) => {
@@ -607,9 +863,18 @@ export default function Home() {
     setShowDictationHint(false);
     setBuiltLetters([]);
     setWordResult("idle");
-    setLearner((item) => ({ ...item, currentLevel: level }));
-    const data = await postAction({ action: "profile", name: learner.name, currentLevel: level });
-    if (data?.learner) setLearner(data.learner);
+    const nextLearner = { ...learner, currentLevel: level };
+    setLearner(nextLearner);
+    setLearnerProfiles((items) =>
+      items.map((item) => (item.id === nextLearner.id ? nextLearner : item)),
+    );
+    const data = await postAction({ action: "profile", name: learner.name, ageBand: learner.ageBand, currentLevel: level });
+    if (data?.learner) {
+      setLearner(data.learner);
+      setLearnerProfiles((items) =>
+        items.map((item) => (item.id === data.learner.id ? data.learner : item)),
+      );
+    }
   };
 
   const goTo = (next: ViewId) => {
@@ -884,9 +1149,23 @@ export default function Home() {
 
   const updateProfile = async () => {
     const nextName = learnerNameDraft.trim() || learner.name;
-    setLearner((item) => ({ ...item, name: nextName }));
-    const data = await postAction({ action: "profile", name: nextName, currentLevel: activeLevel });
-    if (data?.learner) setLearner(data.learner);
+    const nextLearner = { ...learner, name: nextName, ageBand: learnerAgeDraft };
+    setLearner(nextLearner);
+    setLearnerProfiles((items) =>
+      items.map((item) => (item.id === nextLearner.id ? nextLearner : item)),
+    );
+    const data = await postAction({
+      action: "profile",
+      name: nextName,
+      ageBand: learnerAgeDraft,
+      currentLevel: activeLevel,
+    });
+    if (data?.learner) {
+      setLearner(data.learner);
+      setLearnerProfiles((items) =>
+        items.map((item) => (item.id === data.learner.id ? data.learner : item)),
+      );
+    }
   };
 
   const addCustomContent = async () => {
@@ -1445,6 +1724,7 @@ export default function Home() {
         <header className="topbar expanded-topbar">
           <div><span className="today-dot" /><span>{view === "home" ? todayLabel : navGroups.flatMap((group) => group.items).find((item) => item.id === view)?.label}</span></div>
           <div className="top-actions">
+            <label className="learner-switcher"><span>Learner</span><select aria-label="Active learner" value={learner.id ?? ""} disabled={switchingLearner} onChange={(event) => void switchLearner(Number(event.target.value))}>{learnerProfiles.map((profile) => <option key={profile.id ?? profile.name} value={profile.id}>{profile.name}</option>)}</select></label>
             <label className="level-switcher"><span>Path</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>{level.id}. {level.name} ({level.cefr})</option>)}</select></label>
             <button
               className={`save-state ${syncState}`}
@@ -1502,7 +1782,23 @@ export default function Home() {
               <section className="content-library"><div><p className="eyebrow">Your additions</p><h3>{customContent.length} custom items</h3></div>{customContent.length ? customContent.map((item) => <div key={item.id}><span>{item.type.slice(0, 1).toUpperCase()}</span><strong>{item.title}</strong><small>Level {item.level} · {item.type}</small><p className="arabic" dir="rtl">{item.arabic}</p></div>) : <p className="empty-state">Your stories and sentence challenges will appear here and inside the learner&apos;s matching level.</p>}</section>
             </div>}
 
-            {parentTab === "account" && <div className="account-panel"><section><p className="eyebrow">Learner profile</p><h3>Personalise the journey</h3><label><span>Learner name</span><input value={learnerNameDraft} onChange={(event) => setLearnerNameDraft(event.target.value)} /></label><label><span>Current pathway</span><select value={activeLevel} onChange={(event) => selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>Level {level.id} · {level.name}</option>)}</select></label><button className="primary-button" onClick={updateProfile}>{authenticated ? "Save profile" : isGitHubPagesBuild ? "Save on this device" : "Apply for this session"}</button></section><section className="account-identity"><span className="account-avatar">{owner.displayName.slice(0, 1).toUpperCase()}</span><p className="eyebrow">{authenticated ? "Signed-in grown-up" : isGitHubPagesBuild ? "GitHub Pages edition" : "Save across devices"}</p><h3>{authenticated ? owner.displayName : isGitHubPagesBuild ? "Saved in this browser" : "Keep every learning moment"}</h3><p>{owner.email || (isGitHubPagesBuild ? "Use the full app for cloud saving and teacher requests." : "A parent can sign in with ChatGPT.")}</p><div className={`account-save-status ${syncState}`}><i />{syncState === "saved" ? "Progress is stored securely across sessions." : isGitHubPagesBuild ? "Progress, artwork, and custom content stay on this device. Open the full app to use an account across devices." : syncState === "preview" ? "This preview lasts only until the page is closed. Sign in to keep progress, artwork, and lesson requests." : syncState === "error" ? "Saving needs attention. Sign in again or retry shortly." : "Connecting to your saved learning account."}</div>{authenticated ? <a href="/signout-with-chatgpt?return_to=/">Sign out of this account</a> : <a className="account-signin" href={isGitHubPagesBuild ? FULL_APP_URL : "/signin-with-chatgpt?return_to=/"} target={isGitHubPagesBuild ? "_blank" : undefined} rel={isGitHubPagesBuild ? "noreferrer" : undefined}>{isGitHubPagesBuild ? "Open the full Kalimati app →" : "Sign in with ChatGPT →"}</a>}</section></div>}
+            {parentTab === "account" && <div className="account-panel family-account-panel">
+              <section className="family-roster-card">
+                <div className="family-roster-heading"><div><p className="eyebrow">Family learners</p><h3>One grown-up account, a separate journey for every child</h3></div><span>{learnerProfiles.length}/6 profiles</span></div>
+                <div className="learner-profile-list" aria-label="Learner profiles">
+                  {learnerProfiles.map((profile, index) => <button key={profile.id ?? `${profile.name}-${index}`} className={profile.id === learner.id ? "active" : ""} aria-pressed={profile.id === learner.id} disabled={switchingLearner} onClick={() => void switchLearner(profile.id ?? 1)}><span>{profile.name.slice(0, 1).toUpperCase()}</span><div><strong>{profile.name}</strong><small>{profile.ageBand} · Level {profile.currentLevel}</small></div><i>{profile.id === learner.id ? "Learning now" : "Switch →"}</i></button>)}
+                </div>
+                <div className="add-learner-form">
+                  <label><span>New learner name</span><input aria-label="New learner name" value={newLearnerForm.name} maxLength={30} placeholder="Omar" onChange={(event) => setNewLearnerForm((item) => ({ ...item, name: event.target.value }))} /></label>
+                  <label><span>Age group</span><select aria-label="New learner age group" value={newLearnerForm.ageBand} onChange={(event) => setNewLearnerForm((item) => ({ ...item, ageBand: event.target.value }))}>{ageBands.map((band) => <option key={band}>{band}</option>)}</select></label>
+                  <label><span>Starting pathway</span><select aria-label="New learner starting pathway" value={newLearnerForm.currentLevel} onChange={(event) => setNewLearnerForm((item) => ({ ...item, currentLevel: Number(event.target.value) }))}>{levels.map((level) => <option key={level.id} value={level.id}>{level.id}. {level.name}</option>)}</select></label>
+                  <button className="primary-button" disabled={!newLearnerForm.name.trim() || learnerProfiles.length >= 6 || switchingLearner || (!authenticated && !isGitHubPagesBuild)} onClick={() => void createLearner()}>{authenticated ? "Add learner profile" : isGitHubPagesBuild ? "Add on this device" : "Sign in to add learners"}</button>
+                </div>
+                <p className="family-storage-note">{authenticated ? "Each child keeps separate progress, artwork, assessments, and lesson requests." : isGitHubPagesBuild ? "These learner profiles stay on this device. Open the full app for secure saving across devices." : "Sign in as a grown-up to create secure learner profiles and keep each journey separate."}</p>
+              </section>
+              <section className="learner-profile-editor"><p className="eyebrow">Active learner profile</p><h3>Personalise {learner.name}&apos;s journey</h3><label><span>Learner name</span><input value={learnerNameDraft} maxLength={30} onChange={(event) => setLearnerNameDraft(event.target.value)} /></label><label><span>Age group</span><select value={learnerAgeDraft} onChange={(event) => setLearnerAgeDraft(event.target.value)}>{ageBands.map((band) => <option key={band}>{band}</option>)}</select></label><label><span>Current pathway</span><select value={activeLevel} onChange={(event) => void selectLevel(Number(event.target.value))}>{levels.map((level) => <option key={level.id} value={level.id}>Level {level.id} · {level.name}</option>)}</select></label><button className="primary-button" onClick={() => void updateProfile()}>{authenticated ? "Save learner profile" : isGitHubPagesBuild ? "Save on this device" : "Apply for this session"}</button></section>
+              <section className="account-identity"><span className="account-avatar">{owner.displayName.slice(0, 1).toUpperCase()}</span><p className="eyebrow">{authenticated ? "Signed-in grown-up" : isGitHubPagesBuild ? "GitHub Pages edition" : "Save across devices"}</p><h3>{authenticated ? owner.displayName : isGitHubPagesBuild ? "Saved in this browser" : "Keep every learning moment"}</h3><p>{owner.email || (isGitHubPagesBuild ? "Use the full app for cloud saving and teacher requests." : "A parent can sign in with ChatGPT.")}</p><div className={`account-save-status ${syncState}`}><i />{syncState === "saved" ? `${learnerProfiles.length} learner profile${learnerProfiles.length === 1 ? " is" : "s are"} stored securely across sessions.` : isGitHubPagesBuild ? "Progress, artwork, and custom content stay on this device. Open the full app to use an account across devices." : syncState === "preview" ? "This preview lasts only until the page is closed. Sign in to keep progress, artwork, and lesson requests." : syncState === "error" ? "Saving needs attention. Sign in again or retry shortly." : "Connecting to your saved family account."}</div>{authenticated ? <a href="/signout-with-chatgpt?return_to=/">Sign out of this account</a> : <a className="account-signin" href={isGitHubPagesBuild ? FULL_APP_URL : "/signin-with-chatgpt?return_to=/"} target={isGitHubPagesBuild ? "_blank" : undefined} rel={isGitHubPagesBuild ? "noreferrer" : undefined}>{isGitHubPagesBuild ? "Open the full Kalimati app →" : "Sign in with ChatGPT →"}</a>}</section>
+            </div>}
           </section>
         </div>
       )}

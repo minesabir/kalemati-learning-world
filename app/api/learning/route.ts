@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { getChatGPTUser } from "../../chatgpt-auth";
 import { getDb } from "../../../db";
 import { ensureLearner } from "../../../db/learning";
@@ -35,13 +35,34 @@ function routeError(error: unknown) {
   return Response.json({ error: message }, { status: 500 });
 }
 
-export async function GET() {
+const ageBands = ["4–5", "6–8", "9–12", "13+"];
+
+function requestedLearnerId(value: unknown) {
+  const id = Number(value);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+export async function GET(request: Request) {
   const user = await getChatGPTUser();
   if (!user) return Response.json({ authenticated: false });
 
   try {
     const db = getDb();
-    const learner = await ensureLearner(user);
+    const defaultLearner = await ensureLearner(user);
+    const learnerProfiles = await db
+      .select()
+      .from(learners)
+      .where(eq(learners.ownerUserId, user.userId))
+      .orderBy(asc(learners.createdAt), asc(learners.id));
+    const learnerId = requestedLearnerId(
+      new URL(request.url).searchParams.get("learnerId"),
+    );
+    const learner = learnerId
+      ? learnerProfiles.find((item) => item.id === learnerId)
+      : defaultLearner;
+    if (!learner) {
+      return Response.json({ error: "Learner profile not found." }, { status: 404 });
+    }
     const progress = await db
       .select()
       .from(learningProgress)
@@ -66,6 +87,7 @@ export async function GET() {
     return Response.json({
       authenticated: true,
       owner: { displayName: user.displayName, email: user.email },
+      learners: learnerProfiles,
       learner,
       progress,
       artworks: savedArt,
@@ -88,6 +110,57 @@ export async function POST(request: Request) {
     const action = clean(payload.action, 30);
     const db = getDb();
     let learner = await ensureLearner(user);
+    const learnerId = requestedLearnerId(payload.learnerId);
+    if (learnerId) {
+      const [ownedLearner] = await db
+        .select()
+        .from(learners)
+        .where(
+          and(
+            eq(learners.id, learnerId),
+            eq(learners.ownerUserId, user.userId),
+          ),
+        )
+        .limit(1);
+      if (!ownedLearner) {
+        return Response.json({ error: "Learner profile not found." }, { status: 404 });
+      }
+      learner = ownedLearner;
+    }
+
+    if (action === "learner-create") {
+      const learnerProfiles = await db
+        .select()
+        .from(learners)
+        .where(eq(learners.ownerUserId, user.userId))
+        .orderBy(asc(learners.createdAt), asc(learners.id));
+      if (learnerProfiles.length >= 6) {
+        return Response.json(
+          { error: "A family account can include up to six learners." },
+          { status: 400 },
+        );
+      }
+      const name = clean(payload.name, 30);
+      const ageBand = clean(payload.ageBand, 10);
+      const currentLevel = clamp(Number(payload.currentLevel) || 1, 1, 6);
+      if (!name) {
+        return Response.json({ error: "Learner name is required." }, { status: 400 });
+      }
+      const [createdLearner] = await db
+        .insert(learners)
+        .values({
+          ownerUserId: user.userId,
+          name,
+          ageBand: ageBands.includes(ageBand) ? ageBand : "6–8",
+          currentLevel,
+        })
+        .returning();
+      return Response.json({
+        ok: true,
+        learner: createdLearner,
+        learners: [...learnerProfiles, createdLearner],
+      });
+    }
 
     if (action === "progress") {
       const itemId = clean(payload.itemId, 80);
@@ -174,6 +247,7 @@ export async function POST(request: Request) {
 
     if (action === "profile") {
       const name = clean(payload.name, 30) || learner.name;
+      const ageBand = clean(payload.ageBand, 10);
       const currentLevel = clamp(
         Number(payload.currentLevel) || learner.currentLevel,
         1,
@@ -181,7 +255,12 @@ export async function POST(request: Request) {
       );
       await db
         .update(learners)
-        .set({ name, currentLevel, updatedAt: new Date().toISOString() })
+        .set({
+          name,
+          ageBand: ageBands.includes(ageBand) ? ageBand : learner.ageBand,
+          currentLevel,
+          updatedAt: new Date().toISOString(),
+        })
         .where(eq(learners.id, learner.id));
       [learner] = await db
         .select()

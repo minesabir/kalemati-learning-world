@@ -31,7 +31,7 @@ export const learners = sqliteTable(
     updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    uniqueIndex("idx_learners_owner_user_id").on(table.ownerUserId),
+    index("idx_learners_owner_user_id").on(table.ownerUserId),
   ],
 );
 

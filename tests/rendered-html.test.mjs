@@ -45,12 +45,14 @@ test("server-renders the complete Kalimati learning world", async () => {
   assert.doesNotMatch(html, /bird|hoopoe|mascot|duolingo/i);
 });
 
-test("ships levelled curriculum, persistence, and extensible content", async () => {
-  const [page, curriculum, assessments, schema, hosting] = await Promise.all([
+test("ships levelled curriculum, family profiles, persistence, and extensible content", async () => {
+  const [page, curriculum, assessments, schema, learningApi, learnerMigration, hosting] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/curriculum.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/assessments.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/api/learning/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../drizzle/0001_learner_profiles.sql", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
   ]);
 
@@ -81,7 +83,13 @@ test("ships levelled curriculum, persistence, and extensible content", async () 
   assert.match(page, /Sign in to save/);
   assert.match(page, /Sign in with ChatGPT/);
   assert.match(page, /This preview lasts only until the page is closed/);
+  assert.match(page, /prefers-reduced-motion: reduce/);
+  assert.match(page, /window\.scrollTo\(\{ top: 0, behavior \}\)/);
   assert.match(page, /\/api\/learning/);
+  assert.match(page, /aria-label="Active learner"/);
+  assert.match(page, /One grown-up account, a separate journey for every child/);
+  assert.match(page, /Learner profiles/);
+  assert.match(page, /workspaces: Record<string, LearnerWorkspace>/);
   assert.match(assessments, /export const assessmentQuestions/);
   assert.match(assessments, /export const dictationExercises/);
   assert.match(assessments, /export const placementQuestions/);
@@ -89,5 +97,12 @@ test("ships levelled curriculum, persistence, and extensible content", async () 
   assert.match(schema, /export const learningProgress/);
   assert.match(schema, /export const artworks/);
   assert.match(schema, /export const contentItems/);
+  assert.match(schema, /index\("idx_learners_owner_user_id"\)/);
+  assert.doesNotMatch(schema, /uniqueIndex\("idx_learners_owner_user_id"\)/);
+  assert.match(learningApi, /action === "learner-create"/);
+  assert.match(learningApi, /requestedLearnerId/);
+  assert.match(learningApi, /up to six learners/);
+  assert.match(learnerMigration, /DROP INDEX `idx_learners_owner_user_id`/);
+  assert.match(learnerMigration, /CREATE INDEX `idx_learners_owner_user_id`/);
   assert.equal(JSON.parse(hosting).d1, "DB");
 });
